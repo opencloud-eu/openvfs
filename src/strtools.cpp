@@ -1,4 +1,5 @@
-
+// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-FileCopyrightText: 2026 Klaas Freitag <k.freitag@opencloud.eu>
 #include "strtools.h"
 
 namespace StrTools {
