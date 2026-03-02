@@ -802,7 +802,7 @@ int initializeOpenVFSFuse(openVFSfuse_Args &openVFSArgs)
     }
     fuseArgsArray.push_back(nullptr);
     std::cout << std::endl;
-#if FUSE_VERSION > FUSE_MAKE_VERSION(3,2)
+#if FUSE_VERSION > FUSE_MAKE_VERSION(3, 2)
     fuse_set_log_func([](fuse_log_level level, const char *fmt, va_list ap) {
         (void)level;
         auto *context = fuse_get_context();
