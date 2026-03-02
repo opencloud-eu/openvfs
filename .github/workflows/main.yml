@@ -109,7 +109,7 @@ jobs:
       - name: Prepare
         run: |
           New-Item -ItemType Directory "${env:GITHUB_WORKSPACE}/binaries/"
-           & "${env:GITHUB_WORKSPACE}/.github/workflows/.craft.ps1" -c --set "srcDir=${env:GITHUB_WORKSPACE}/openVfsFuse" opencloud/openvfs
+           & "${env:GITHUB_WORKSPACE}/.github/workflows/.craft.ps1" -c --set "srcDir=${env:GITHUB_WORKSPACE}" opencloud/openvfs
           if($IsLinux) {
               # ensure we have fuse3-devel installed
               dnf install -y fuse3-devel
