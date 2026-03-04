@@ -6,6 +6,7 @@ add_library(openvfs SHARED
 		xattr.cpp
 		openvfsattributes.cpp
 )
+target_include_directories(openvfs INTERFACE "$<INSTALL_INTERFACE:${KDE_INSTALL_INCLUDEDIR}>")
 target_link_libraries(openvfs PRIVATE $<BUILD_INTERFACE:nlohmann_json::nlohmann_json>)
 set_target_properties(openvfs PROPERTIES EXPORT_NAME LibOpenVFS)
 generate_export_header(openvfs
