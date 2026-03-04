@@ -696,31 +696,38 @@ static int openVFSfuse_setxattr(const char *orig_path, const char *name, const c
 
 static int openVFSfuse_getxattr(const char *orig_path, const char *name, char *value, size_t size)
 {
+    /**
+     * if size is zero, getxattr returns the required size of the buffer.
+     * See https://linux.die.net/man/2/getxattr
+     */
+    const auto copyDataResult = [&](const auto &s) -> int {
+        if (size == 0) {
+            return static_cast<int>(s.size());
+        } else if (s.size() <= size) {
+            std::ranges::copy(s, value);
+            return static_cast<int>(s.size());
+        }
+        return -ERANGE;
+    };
     const auto path = getInternalPath(orig_path);
     if (name == OpenVfsConstants::XAttributeNames::RealSize) {
         struct stat statbuf = {};
         if (lstat(path.c_str(), &statbuf) == -1) {
             return -errno;
         }
-        const auto realSize = std::to_string(statbuf.st_size);
-        if (realSize.size() < size) {
-            std::ranges::copy(realSize, value);
-            return static_cast<int>(realSize.size());
-        }
-        return -ERANGE;
+        return copyDataResult(std::to_string(statbuf.st_size));
     }
     const auto ret = Xattr::getxattr(path, name, value, size);
     if (ret == -ENODATA && name == OpenVfsConstants::XAttributeNames::Data) {
+        errno = 0;
         // return the default value for the attributes
-        // message pack is null terminated
-        static const auto defaultData = OpenVfsAttributes::PlaceHolderAttributes({}).toData();
-        if (size > defaultData.size()) {
-            errno = 0;
-            std::ranges::copy(defaultData, value);
-            openvfsfuse_log(path, "getxattr", 0, "Returning default data for %s: %s", name, value);
-            return static_cast<int>(defaultData.size());
-        }
-        return -ERANGE;
+        static const auto defaultData = [] {
+            auto attributes = OpenVfsAttributes::PlaceHolderAttributes::create({}, {}, {}, {});
+            attributes.state = OpenVfsConstants::States::Hydrated;
+            return attributes.toData();
+        }();
+        openvfsfuse_log(path, "getxattr", 0, "Returning default data for %s", name);
+        return copyDataResult(defaultData);
     }
     return ret;
 }
