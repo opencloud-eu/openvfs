@@ -13,10 +13,10 @@
 #endif
 
 #include "openvfsfuse.h"
-#include "flags.h"
 #include "openvfsattributes.h"
 #include "sharedmap.h"
 #include "socketthread.h"
+#include "strtools.h"
 #include "xattr.h"
 
 #include <chrono>
@@ -469,31 +469,29 @@ static int openVFSfuse_open(const char *orig_path, struct fuse_file_info *fi)
     const auto path = getInternalPath(orig_path);
 
     const auto opener = getcallername(fuse_get_context());
-    static auto openFlags = [] {
-        auto f = OFlags<decltype(fi->flags)>("OpenFlags");
-        ADD_O_FLAG(f, O_RDONLY);
-        ADD_O_FLAG(f, O_WRONLY);
-        ADD_O_FLAG(f, O_RDWR);
-        ADD_O_FLAG(f, O_APPEND);
-        ADD_O_FLAG(f, O_CREAT);
-        ADD_O_FLAG(f, O_DIRECTORY);
-        ADD_O_FLAG(f, O_EXCL);
-        ADD_O_FLAG(f, O_NOCTTY);
-        ADD_O_FLAG(f, O_NOFOLLOW);
+    const auto openFlagName = StrTools::printFlags("OpenFlags", fi->flags, [](uint64_t f) -> std::string {
+        switch (f) {
+            ENUM_CASE(O_RDONLY);
+            ENUM_CASE(O_WRONLY);
+            ENUM_CASE(O_RDWR);
+            ENUM_CASE(O_APPEND);
+            ENUM_CASE(O_CREAT);
+            ENUM_CASE(O_DIRECTORY);
+            ENUM_CASE(O_EXCL);
+            ENUM_CASE(O_NOCTTY);
+            ENUM_CASE(O_NOFOLLOW);
 #ifdef O_TMPFILE
-        ADD_O_FLAG(f, O_TMPFILE);
+            ENUM_CASE(O_TMPFILE);
 #endif
-        ADD_O_FLAG(f, O_APPEND);
-        ADD_O_FLAG(f, O_TRUNC);
-        f.names[0100000] = "O_LARGEFILE";
+            ENUM_CASE(O_TRUNC);
+        case 0100000:
+            return "O_LARGEFILE";
+        default:
+            return StrTools::printFlag(f);
+        }
+    });
 
-        return f;
-    }();
-
-
-    std::stringstream s;
-    s << OFlag(openFlags, fi->flags);
-    openvfsfuse_log(path, "open", res, "open %s %s by %s", s.str().data(), path.c_str(), opener.c_str());
+    openvfsfuse_log(path, "open", res, "open %s %s by %s", openFlagName.c_str(), path.c_str(), opener.c_str());
 
     // The desktop client must not be blocked from accessing the file
     // to be able to overwrite it.

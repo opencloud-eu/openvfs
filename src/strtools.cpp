@@ -2,6 +2,8 @@
 // SPDX-FileCopyrightText: 2026 Klaas Freitag <k.freitag@opencloud.eu>
 #include "strtools.h"
 
+#include <format>
+
 namespace StrTools {
 // Custom implementation of string split, which is not available in std::
 // remove it it once is added
@@ -21,4 +23,8 @@ std::vector<std::string> split(const std::string &str, char delimiter)
     return tokens;
 }
 
+std::string printFlag(uint64_t flags)
+{
+    return std::format("b{:b} 0{:o} 0x{:x}", flags, flags, flags);
+}
 }
