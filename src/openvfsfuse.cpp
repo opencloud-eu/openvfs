@@ -678,17 +678,29 @@ static int openVFSfuse_getxattr(const char *orig_path, const char *name, char *v
         if (lstat(path.c_str(), &statbuf) == -1) {
             return -errno;
         }
-        return std::snprintf(value, size, "%lld", statbuf.st_size);
+        const auto realSize = std::to_string(statbuf.st_size);
+        if (size == 0) {
+            return static_cast<int>(realSize.size());
+        } else if (realSize.size() <= size) {
+            std::ranges::copy(realSize, value);
+            return static_cast<int>(realSize.size());
+        }
+        return -ERANGE;
     }
     const auto ret = Xattr::getxattr(path, name, value, size);
     if (ret == -ENODATA && name == OpenVfsConstants::XAttributeNames::Data) {
+        errno = 0;
         // return the default value for the attributes
-        // message pack is null terminated
-        static const auto defaultData = OpenVfsAttributes::PlaceHolderAttributes({}).toData();
-        if (size > defaultData.size()) {
-            errno = 0;
-            std::copy(defaultData.begin(), defaultData.end(), value);
-            openvfsfuse_log(path, "getxattr", 0, "Returning default data for %s: %s", name, value);
+        static const auto defaultData = [] {
+            auto attributes = OpenVfsAttributes::PlaceHolderAttributes::create({}, {}, {}, {});
+            attributes.state = OpenVfsConstants::States::Hydrated;
+            return attributes.toData();
+        }();
+        if (size == 0) {
+            return static_cast<int>(defaultData.size());
+        } else if (defaultData.size() <= size) {
+            std::ranges::copy(defaultData, value);
+            openvfsfuse_log(path, "getxattr", 0, "Returning default data for %s", name);
             return static_cast<int>(defaultData.size());
         }
         return -ERANGE;
