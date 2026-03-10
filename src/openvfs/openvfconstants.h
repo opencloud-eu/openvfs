@@ -2,6 +2,9 @@
 // SPDX-FileCopyrightText: 2025 Hannah von Reth <h.vonreth@opencloud.eu>
 
 #pragma once
+
+#include "openvfs/version.h"
+
 #include <assert.h>
 #include <cstdint>
 #include <string_view>
@@ -11,7 +14,7 @@
  */
 namespace OpenVfsConstants {
 
-constexpr uint8_t Version = 1;
+constexpr uint8_t Version = OPENVFS_VERSION_MAJOR;
 
 namespace XAttributeNames {
     /**
