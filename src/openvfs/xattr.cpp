@@ -1,12 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // SPDX-FileCopyrightText: 2025 Hannah von Reth <h.vonreth@opencloud.eu>
 
-#include "xattr.h"
+#include "openvfs/xattr.h"
 
 #include <assert.h>
 #include <format>
-
-#include "openvfsfuse.h"
 
 #include <optional>
 #include <sys/xattr.h>

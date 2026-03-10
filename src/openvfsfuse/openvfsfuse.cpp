@@ -13,10 +13,10 @@
 #endif
 
 #include "openvfsfuse.h"
-#include "openvfsattributes.h"
+#include "openvfs/openvfsattributes.h"
+#include "openvfs/xattr.h"
 #include "sharedmap.h"
 #include "socketthread.h"
-#include "xattr.h"
 
 #include <chrono>
 #include <cstring>
