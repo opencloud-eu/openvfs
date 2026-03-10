@@ -6,7 +6,7 @@ add_executable(openvfsfuse
 
         strtools.cpp
 )
-set_target_properties(openvfsfuse PROPERTIES EXPORT_NAME OpenVFS)
+set_target_properties(openvfsfuse PROPERTIES EXPORT_NAME OpenVFS OUTPUT_NAME openvfs)
 ecm_mark_nongui_executable(openvfsfuse)
 target_link_libraries(openvfsfuse PRIVATE openvfs nlohmann_json::nlohmann_json FUSE::FUSE Threads::Threads)
 # disable darwin extensions for now
