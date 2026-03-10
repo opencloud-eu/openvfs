@@ -11,5 +11,14 @@ generate_export_header(openvfs
 )
 
 
-install(FILES ${CMAKE_CURRENT_BINARY_DIR}/openvfs_export.h openvfconstants.h openvfsattributes.h DESTINATION ${KDE_INSTALL_INCLUDEDIR}/openvfs)
-install(TARGETS openvfs EXPORT OpenVFSConfig ${KDE_INSTALL_TARGETS_DEFAULT_ARGS} )
+install(FILES
+            ${CMAKE_CURRENT_BINARY_DIR}/../openvfs/version.h
+            ${CMAKE_CURRENT_BINARY_DIR}/openvfs_export.h
+            openvfconstants.h
+            openvfsattributes.h
+        DESTINATION
+            ${KDE_INSTALL_INCLUDEDIR}/openvfs
+)
+install(TARGETS openvfs
+        EXPORT OpenVFSConfig ${KDE_INSTALL_TARGETS_DEFAULT_ARGS}
+)
