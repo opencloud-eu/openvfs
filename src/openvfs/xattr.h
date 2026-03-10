@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2025 Hannah von Reth <h.vonreth@opencloud.eu>
 
 #pragma once
-#include "openvfs_export.h"
+#include "openvfs/openvfs_export.h"
 
 #include <filesystem>
 #include <optional>
