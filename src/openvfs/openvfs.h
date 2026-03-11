@@ -9,7 +9,37 @@
 #include <string>
 #include <vector>
 
-namespace OpenVfsAttributes {
+namespace OpenVFS {
+class OPENVFS_EXPORT Registration
+{
+public:
+    Registration(const std::filesystem::path &absolutePath, const std::string &owner);
+
+    [[nodiscard]] std::vector<uint8_t> toData() const;
+    static Registration fromData(const std::filesystem::path &absolutePath, const std::vector<uint8_t> &d);
+    static Registration fromAttributes(const std::filesystem::path &absolutePath);
+
+    static Registration registerFilesystem(const std::filesystem::path &path, const std::string &owner);
+    static bool unregisterFilesystem(const Registration &info);
+
+    [[nodiscard]] const std::filesystem::path &path() const { return _path; }
+    [[nodiscard]] const std::string &owner() const { return _owner; }
+    [[nodiscard]] int version() const { return _version; }
+    [[nodiscard]] const std::string &error() const { return _error; }
+
+    [[nodiscard]] bool isOk() const { return _error.empty(); }
+    operator bool() const { return isOk(); }
+
+
+private:
+    Registration(const std::filesystem::path &absolutePath);
+
+    std::filesystem::path _path;
+    std::string _owner;
+    int _version = Constants::Version;
+    std::string _error;
+};
+
 class OPENVFS_EXPORT PlaceHolderAttributes
 {
 public:
@@ -28,8 +58,8 @@ public:
     std::string fileId;
     std::size_t size = 0;
     // assume an exisitng file by default
-    OpenVfsConstants::States state = OpenVfsConstants::States::Hydrated;
-    OpenVfsConstants::PinStates pinState = OpenVfsConstants::PinStates::Inherited;
+    Constants::States state = Constants::States::Hydrated;
+    Constants::PinStates pinState = Constants::PinStates::Inherited;
 
     [[nodiscard]] bool isOk() const { return _ok; }
 
@@ -39,7 +69,7 @@ public:
 
     static PlaceHolderAttributes create(const std::filesystem::path &absolutePath, const std::string &etag, const std::string &fileId, std::size_t size)
     {
-        using namespace OpenVfsConstants;
+        using namespace OpenVFS::Constants;
         return {absolutePath, etag, fileId, size, States::DeHydrated, PinStates::Inherited};
     }
 
@@ -54,11 +84,11 @@ public:
             return false;
         }
         switch (state) {
-        case OpenVfsConstants::States::Hydrated:
+        case Constants::States::Hydrated:
             return size == 0;
-        case OpenVfsConstants::States::DeHydrated:
+        case Constants::States::DeHydrated:
             return realSize() == 0;
-        case OpenVfsConstants::States::Hydrating:
+        case Constants::States::Hydrating:
             return true;
         }
         return true;
@@ -66,7 +96,7 @@ public:
 
 private:
     PlaceHolderAttributes(const std::filesystem::path &absolutePath, const std::string &etag, const std::string &fileId, std::size_t size,
-        OpenVfsConstants::States state, OpenVfsConstants::PinStates pinState)
+        Constants::States state, Constants::PinStates pinState)
         : absolutePath(absolutePath)
         , etag(etag)
         , fileId(fileId)
