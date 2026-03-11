@@ -13,7 +13,8 @@
 #endif
 
 #include "openvfsfuse.h"
-#include "openvfs/openvfsattributes.h"
+
+#include "openvfs/openvfs.h"
 #include "openvfs/xattr.h"
 #include "sharedmap.h"
 #include "socketthread.h"
@@ -50,6 +51,7 @@ class VFSFuseContext
 public:
     VFSFuseContext(openVFSfuse_Args args)
         : _mountPoint(args.mountPoint)
+        , _owner(args.owner)
         , _rootHandle(open(_mountPoint.c_str(), 0))
         , _appsNoHydrateFull(args.appsNoHydrateFull)
         , _appsNoHydrateEndsWith(args.appsNoHydrateEndsWith)
@@ -87,6 +89,8 @@ public:
 
     auto mountPoint() const { return _mountPoint; }
 
+    auto owner() const { return _owner; }
+
     static auto &instance() { return *_instance; }
 
     bool blockedToOpen(const std::string &app)
@@ -98,6 +102,7 @@ public:
 private:
     static VFSFuseContext *_instance;
     std::filesystem::path _mountPoint;
+    std::string _owner;
     int _rootHandle;
     std::vector<std::string> _appsNoHydrateFull;
     std::vector<std::string> _appsNoHydrateEndsWith;
@@ -187,7 +192,7 @@ static int openVFSfuse_getattr(const char *orig_path, struct stat *stbuf, fuse_f
     }
     // check virtual size if size is 0 and path is not a dir
     if (!S_ISDIR(stbuf->st_mode) && stbuf->st_size == 0) {
-        if (const auto attr = OpenVfsAttributes::PlaceHolderAttributes::fromAttributes(path)) {
+        if (const auto attr = OpenVFS::PlaceHolderAttributes::fromAttributes(path)) {
             stbuf->st_size = static_cast<decltype(stbuf->st_size)>(attr->size);
         }
     }
@@ -476,8 +481,8 @@ static int openVFSfuse_open(const char *orig_path, struct fuse_file_info *fi)
     if (fuse_get_context()->pid == _jobs.desktopClientPid()) {
         openvfsfuse_log(path, "open", res, "Desktop client tries to access, bypassing!");
     } else {
-        if (const auto attribs = OpenVfsAttributes::PlaceHolderAttributes::fromAttributes(path)) {
-            if (attribs->state == OpenVfsConstants::States::DeHydrated) {
+        if (const auto attribs = OpenVFS::PlaceHolderAttributes::fromAttributes(path)) {
+            if (attribs->state == OpenVFS::Constants::States::DeHydrated) {
                 // the file is virtual. It will be hydrated if the calling instance
                 // is not on the ignore list
 
@@ -686,7 +691,7 @@ static int openVFSfuse_getxattr(const char *orig_path, const char *name, char *v
         return -ERANGE;
     };
     const auto path = getInternalPath(orig_path);
-    if (name == OpenVfsConstants::XAttributeNames::RealSize) {
+    if (name == OpenVFS::Constants::XAttributeNames::RealSize) {
         struct stat statbuf = {};
         if (lstat(path.c_str(), &statbuf) == -1) {
             return -errno;
@@ -694,12 +699,12 @@ static int openVFSfuse_getxattr(const char *orig_path, const char *name, char *v
         return copyDataResult(std::to_string(statbuf.st_size));
     }
     const auto ret = Xattr::getxattr(path, name, value, size);
-    if (ret == -ENODATA && name == OpenVfsConstants::XAttributeNames::Data) {
+    if (ret == -ENODATA && name == OpenVFS::Constants::XAttributeNames::Data) {
         errno = 0;
         // return the default value for the attributes
         static const auto defaultData = [] {
-            auto attributes = OpenVfsAttributes::PlaceHolderAttributes::create({}, {}, {}, {});
-            attributes.state = OpenVfsConstants::States::Hydrated;
+            auto attributes = OpenVFS::PlaceHolderAttributes::create({}, {}, {}, {});
+            attributes.state = OpenVFS::Constants::States::Hydrated;
             return attributes.toData();
         }();
         openvfsfuse_log(path, "getxattr", 0, "Returning default data for %s", name);
@@ -725,15 +730,16 @@ int initializeOpenVFSFuse(openVFSfuse_Args &openVFSArgs)
     const auto contextInstance = std::make_unique<VFSFuseContext>(openVFSArgs);
 
     // First, check if the mount point has a xattr that shows that it's ours
-    const auto owner = Xattr::CPP::getxattr(contextInstance->mountPoint(), OpenVfsConstants::XAttributeNames::Owner);
-    if (!owner) {
-        std::cerr << "Root directory does not have owner info" << std::endl;
-        return -errno;
+    if (const auto info = OpenVFS::Registration::fromAttributes(contextInstance->mountPoint())) {
+        if (info.owner() != contextInstance->owner()) {
+            std::cerr << "Mount point " << contextInstance->mountPoint() << " is not owned by " << contextInstance->owner() << std::endl;
+            return -1;
+        }
+    } else {
+        std::cerr << "No registration info found for mount point " << contextInstance->mountPoint() << " " << info.error() << std::endl;
+        return -1;
     }
-    if (!owner->starts_with("OpenCloud")) {
-        std::cerr << "Root directory owned by different openVFS provider " << owner.value() << std::endl;
-        return -errno;
-    }
+
 
     umask(0);
     fuse_operations openVFSfuse_oper = {};

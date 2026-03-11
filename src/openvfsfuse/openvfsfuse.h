@@ -18,6 +18,7 @@
 struct openVFSfuse_Args
 {
     std::filesystem::path mountPoint; // where the users read files
+    std::string owner; // an identifier used during the re
     bool isDaemon = true; // true == spawn in background
     std::vector<std::string> fuseArgv;
     std::vector<std::string> appsNoHydrateFull; // these apps are not permitted to cause a dehydration
