@@ -78,7 +78,7 @@ SocketThread::~SocketThread()
 //----------------------------------------------------------------------------
 // CreateThread
 //----------------------------------------------------------------------------
-bool SocketThread::CreateThread()
+bool SocketThread::CreateThread(const std::string& socketPath)
 {
     if (!m_thread) {
         m_threadStartFuture = m_threadStartPromise.get_future();
@@ -91,14 +91,16 @@ bool SocketThread::CreateThread()
         // Wait for the thread to enter the Process method
         m_threadStartFuture.get();
 
-        initSocket();
+        initSocket(socketPath);
     }
 
     return true;
 }
 
-int SocketThread::initSocket()
+int SocketThread::initSocket(const std::string& socketPath)
 {
+    assert(!socketPath.empty());
+
     _socket = socket(AF_UNIX, SOCK_STREAM, 0);
     if (_socket < 0) {
         return -1;
@@ -110,7 +112,8 @@ int SocketThread::initSocket()
 
     struct sockaddr_un addr{};
     addr.sun_family = AF_UNIX;
-    std::strncpy(addr.sun_path, _socketPath.c_str(), sizeof(addr.sun_path) - 1);
+
+    std::strncpy(addr.sun_path, socketPath.c_str(), sizeof(addr.sun_path) - 1);
 
     if (connect(_socket, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
         return -1;
@@ -211,7 +214,6 @@ void SocketThread::handleReceivedMsg(const std::string &rawmsg)
                 std::cerr << "Invalid JSON message: " << msgAttr << e.what() << std::endl;
                 continue;
             }
-            // rename this file to final dest.
 
             if (id > 0) {
                 int res{-1}; // Default set to fail

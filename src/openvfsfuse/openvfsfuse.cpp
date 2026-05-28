@@ -57,6 +57,7 @@ public:
         , _appsNoHydrateEndsWith(args.appsNoHydrateEndsWith)
     {
         assert(!_instance);
+
         _instance = this;
     }
 
@@ -740,7 +741,6 @@ int initializeOpenVFSFuse(openVFSfuse_Args &openVFSArgs)
         return -1;
     }
 
-
     umask(0);
     fuse_operations openVFSfuse_oper = {};
     openVFSfuse_oper.init = openVFSfuse_init;
@@ -770,10 +770,14 @@ int initializeOpenVFSFuse(openVFSfuse_Args &openVFSArgs)
     openVFSfuse_oper.listxattr = openVFSfuse_listxattr;
     openVFSfuse_oper.removexattr = openVFSfuse_removexattr;
 
-    _socketThread.CreateThread();
+    assert(!openVFSArgs.socketPath.empty());
+    _socketThread.CreateThread(openVFSArgs.socketPath);
 
 
-    std::cout << "openVFSfuse starting. PID:" << getpid() << " ";
+    std::cout << "openVFSfuse starting: PID:" << getpid();
+    std::cout << ", Socket:" << openVFSArgs.socketPath << std::endl;
+    std::cout << "fuse command: ";
+
     std::vector<const char *> fuseArgsArray;
     for (const auto &s : openVFSArgs.fuseArgv) {
         fuseArgsArray.push_back(s.data());
