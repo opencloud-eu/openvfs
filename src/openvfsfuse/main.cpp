@@ -57,7 +57,7 @@ std::optional<openVFSfuse_Args> processArgs(int argc, char *argv[])
 
     bool got_p = false;
 
-    while ((res = getopt(argc, argv, "hpfdi:o:")) != -1) {
+    while ((res = getopt(argc, argv, "hpfdi:o:s:")) != -1) {
         switch (res) {
         case 'h':
             usage(argv[0]);
@@ -89,6 +89,9 @@ std::optional<openVFSfuse_Args> processArgs(int argc, char *argv[])
         }
         case 'o':
             out.owner = optarg;
+            break;
+        case 's':
+            out.socketPath = optarg;
             break;
         default:
             assert(false);
