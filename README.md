@@ -48,7 +48,7 @@ Details on integrating openVFS into a sync client are described in the [integrat
 
 ## Contribute
 
-The files on demand system was initially proposed by OpenCloud in April 2025 and is under consideration by the open-source cloud storage project [Nextcloud](https://www.nextcloud.org).
+The files on demand system was initially proposed by [OpenCloud](https://opencloud.eu) in April 2025 and is under consideration by the open-source cloud storage project [Nextcloud](https://www.nextcloud.com).
 
 Feedback is welcome. Start a discussion or open an issue on GitHub for bug reports and feature requests.
 
