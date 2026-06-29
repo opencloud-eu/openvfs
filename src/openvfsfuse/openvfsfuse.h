@@ -23,6 +23,7 @@ struct openVFSfuse_Args
     std::vector<std::string> fuseArgv;
     std::vector<std::string> appsNoHydrateFull; // these apps are not permitted to cause a dehydration
     std::vector<std::string> appsNoHydrateEndsWith;
+    std::string socketPath; // custom socket path (empty = default)
 };
 
 int initializeOpenVFSFuse(openVFSfuse_Args &openVFSArgs);

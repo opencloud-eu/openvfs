@@ -42,7 +42,7 @@ namespace {
 void usage(char *name)
 {
     std::cerr << "Usage:" << std::endl //
-              << name << " [-h] | [-f] [-p] [-d] -i config-file -o ownerId /directory-mountpoint" << std::endl //
+              << name << " [-h] | [-f] [-p] [-d] [-s socket-path] -i config-file -o ownerId /directory-mountpoint" << std::endl //
               << "Type 'man openvfsfuse' for more details" << std::endl;
 }
 
@@ -57,7 +57,7 @@ std::optional<openVFSfuse_Args> processArgs(int argc, char *argv[])
 
     bool got_p = false;
 
-    while ((res = getopt(argc, argv, "hpfdi:o:")) != -1) {
+    while ((res = getopt(argc, argv, "hpfdi:o:s:")) != -1) {
         switch (res) {
         case 'h':
             usage(argv[0]);
@@ -89,6 +89,10 @@ std::optional<openVFSfuse_Args> processArgs(int argc, char *argv[])
         }
         case 'o':
             out.owner = optarg;
+            break;
+        case 's':
+            out.socketPath = optarg;
+            std::cout << "openVFSfuse using socket at " << optarg << std::endl;
             break;
         default:
             assert(false);

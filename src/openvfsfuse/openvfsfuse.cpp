@@ -727,6 +727,10 @@ static int openVFSfuse_removexattr(const char *orig_path, const char *name)
 
 int initializeOpenVFSFuse(openVFSfuse_Args &openVFSArgs)
 {
+    if (!openVFSArgs.socketPath.empty()) {
+        _socketThread.setSocketPath(openVFSArgs.socketPath);
+    }
+
     const auto contextInstance = std::make_unique<VFSFuseContext>(openVFSArgs);
 
     // First, check if the mount point has a xattr that shows that it's ours

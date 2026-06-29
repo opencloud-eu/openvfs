@@ -80,6 +80,9 @@ public:
     /// Get thread name
     std::string GetThreadName() { return THREAD_NAME; }
 
+    /// Set the socket path (must be called before CreateThread)
+    void setSocketPath(const std::string &path) { _socketPath = path; }
+
 
 private:
     SocketThread(const SocketThread &) = delete;
@@ -113,7 +116,7 @@ private:
     std::future<void> m_threadStartFuture;
 
 
-    const std::string _socketPath{"/run/user/1000/OpenCloud/socket"};
+    std::string _socketPath{"/run/user/1000/OpenCloud/socket"};
     std::atomic<int> _socket;
 
     SharedMap &_sharedMap;
