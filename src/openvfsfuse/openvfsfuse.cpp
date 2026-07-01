@@ -55,6 +55,7 @@ public:
         , _rootHandle(open(_mountPoint.c_str(), 0))
         , _appsNoHydrateFull(args.appsNoHydrateFull)
         , _appsNoHydrateEndsWith(args.appsNoHydrateEndsWith)
+        , _stripXattrKeys(args.stripXattrKeys)
     {
         assert(!_instance);
         _instance = this;
@@ -99,6 +100,8 @@ public:
             || std::ranges::find_if(_appsNoHydrateEndsWith, [app](const auto &a) { return app.ends_with(a); }) != _appsNoHydrateEndsWith.cend();
     }
 
+    const auto &stripXattrKeys() const { return _stripXattrKeys; }
+
 private:
     static VFSFuseContext *_instance;
     std::filesystem::path _mountPoint;
@@ -106,6 +109,7 @@ private:
     int _rootHandle;
     std::vector<std::string> _appsNoHydrateFull;
     std::vector<std::string> _appsNoHydrateEndsWith;
+    std::vector<std::string> _stripXattrKeys;
 };
 
 VFSFuseContext *VFSFuseContext::_instance = nullptr;
@@ -671,6 +675,34 @@ static int openVFSfuse_fsync(const char *orig_path, int isdatasync, struct fuse_
 /* xattr operations are optional and can safely be left unimplemented */
 static int openVFSfuse_setxattr(const char *orig_path, const char *name, const char *value, size_t size, int flags)
 {
+    // When a non-client process writes user.openvfs.data, strip keys listed
+    // in stripXattrKeys (configured via -x flag). This prevents file managers
+    // from copying identity/protection state on copy+paste.
+    if (std::string_view(name) == OpenVFS::Constants::XAttributeNames::Data
+        && !VFSFuseContext::instance().stripXattrKeys().empty()) {
+        auto *context = fuse_get_context();
+        if (context && context->pid != _jobs.desktopClientPid()) {
+            try {
+                auto j = nlohmann::json::from_msgpack(std::vector<uint8_t>(value, value + size));
+                bool modified = false;
+                for (const auto &key : VFSFuseContext::instance().stripXattrKeys()) {
+                    if (j.contains(key) && j[key].is_string() && !j[key].get<std::string>().empty()) {
+                        j[key] = "";
+                        modified = true;
+                    }
+                }
+                if (modified) {
+                    auto cleaned = nlohmann::json::to_msgpack(j);
+                    const auto path = getInternalPath(orig_path);
+                    openvfsfuse_log(path, "setxattr", 0, "stripped protected keys from copy by pid %d", context->pid);
+                    return Xattr::setxattr(path, name, reinterpret_cast<const char *>(cleaned.data()), cleaned.size(), flags);
+                }
+            } catch (...) {
+                // If msgpack parsing fails, pass through unchanged
+            }
+        }
+    }
+
     const auto path = getInternalPath(orig_path);
     return Xattr::setxattr(path, name, value, size, flags);
 }
