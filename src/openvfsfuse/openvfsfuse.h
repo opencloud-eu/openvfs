@@ -23,6 +23,7 @@ struct openVFSfuse_Args
     std::vector<std::string> fuseArgv;
     std::vector<std::string> appsNoHydrateFull; // these apps are not permitted to cause a dehydration
     std::vector<std::string> appsNoHydrateEndsWith;
+    std::vector<std::string> stripXattrKeys; // msgpack keys stripped from user.openvfs.data on non-client writes
 };
 
 int initializeOpenVFSFuse(openVFSfuse_Args &openVFSArgs);

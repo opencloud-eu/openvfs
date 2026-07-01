@@ -6,6 +6,7 @@
 #include <getopt.h>
 #include <iostream>
 #include <optional>
+#include <sstream>
 #include <vector>
 
 #include <nlohmann/json.hpp>
@@ -42,7 +43,7 @@ namespace {
 void usage(char *name)
 {
     std::cerr << "Usage:" << std::endl //
-              << name << " [-h] | [-f] [-p] [-d] -i config-file -o ownerId /directory-mountpoint" << std::endl //
+              << name << " [-h] | [-f] [-p] [-d] [-x key1,key2,...] -i config-file -o ownerId /directory-mountpoint" << std::endl //
               << "Type 'man openvfsfuse' for more details" << std::endl;
 }
 
@@ -57,7 +58,7 @@ std::optional<openVFSfuse_Args> processArgs(int argc, char *argv[])
 
     bool got_p = false;
 
-    while ((res = getopt(argc, argv, "hpfdi:o:")) != -1) {
+    while ((res = getopt(argc, argv, "hpfdi:o:x:")) != -1) {
         switch (res) {
         case 'h':
             usage(argv[0]);
@@ -90,6 +91,19 @@ std::optional<openVFSfuse_Args> processArgs(int argc, char *argv[])
         case 'o':
             out.owner = optarg;
             break;
+        case 'x': {
+            // Parse comma-separated list of msgpack keys to strip on non-client setxattr
+            std::string keys(optarg);
+            std::istringstream ss(keys);
+            std::string key;
+            while (std::getline(ss, key, ',')) {
+                if (!key.empty()) {
+                    out.stripXattrKeys.push_back(key);
+                }
+            }
+            std::cout << "openVFSfuse stripping xattr keys: " << keys << std::endl;
+            break;
+        }
         default:
             assert(false);
             break;
