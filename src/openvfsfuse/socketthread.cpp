@@ -21,6 +21,7 @@
  */
 
 #include "socketthread.h"
+#include "openvfsfuse.h"
 #include "sharedmap.h"
 #include "strtools.h"
 
@@ -229,6 +230,15 @@ void SocketThread::handleReceivedMsg(const std::string &rawmsg)
                 } else {
                     cout << "Setting Job ID " << id << " to result " << res << endl;
                 }
+            }
+        } else if (msgType == "V2/INVALIDATE_PATH") {
+            try {
+                const auto j = json::parse(msgAttr);
+                const auto path = j["arguments"]["path"].get<string>();
+                cout << "Invalidating path: " << path << endl;
+                openvfsfuse_invalidate_path(path);
+            } catch (json::exception &e) {
+                std::cerr << "Invalid INVALIDATE_PATH message: " << msgAttr << e.what() << std::endl;
             }
         } else if (msgType == "VERSION") {
             vector<string> attribs = StrTools::split(msgAttr, ':');
