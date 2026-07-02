@@ -57,7 +57,7 @@ public:
 
     /// Called once to create the worker thread
     /// @return True if thread is created. False otherwise.
-    bool CreateThread();
+    bool CreateThread(const std::string &socketPath);
 
     /// Called once a program exit to exit the worker thread
     void ExitThread();
@@ -86,7 +86,7 @@ private:
     SocketThread &operator=(const SocketThread &) = delete;
 
     /// Initialise the socket to communicate with the client
-    int initSocket();
+    int initSocket(const std::string& socketPath);
 
     bool socketSendMsg(std::shared_ptr<MsgData>);
     std::string readSocket();
@@ -112,8 +112,6 @@ private:
     std::promise<void> m_threadStartPromise;
     std::future<void> m_threadStartFuture;
 
-
-    const std::string _socketPath{"/run/user/1000/OpenCloud/socket"};
     std::atomic<int> _socket;
 
     SharedMap &_sharedMap;
