@@ -235,10 +235,10 @@ void SocketThread::handleReceivedMsg(const std::string &rawmsg)
             try {
                 const auto j = json::parse(msgAttr);
                 const auto path = j["arguments"]["path"].get<string>();
-                cout << "Invalidating path: " << path << endl;
+                openvfsfuse_log(path, "invalidate_path", 0, "received via socket");
                 openvfsfuse_invalidate_path(path);
             } catch (json::exception &e) {
-                std::cerr << "Invalid INVALIDATE_PATH message: " << msgAttr << e.what() << std::endl;
+                openvfsfuse_log("", "invalidate_path", -1, "invalid message: %s %s", msgAttr.c_str(), e.what());
             }
         } else if (msgType == "VERSION") {
             vector<string> attribs = StrTools::split(msgAttr, ':');

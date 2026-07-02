@@ -736,18 +736,17 @@ static int openVFSfuse_removexattr(const char *orig_path, const char *name)
 
 void openvfsfuse_invalidate_path(const std::string &path)
 {
-    if (_fuseInstance) {
-        // Prepend "/" if not absolute (internal paths are relative)
-        std::string fusePath = path;
-        if (!fusePath.empty() && fusePath[0] != '/') {
-            fusePath = "/" + fusePath;
-        }
-        int res = fuse_invalidate_path(_fuseInstance, fusePath.c_str());
-        if (res == 0 || res == -ENOENT) {
-            openvfsfuse_log(fusePath, "invalidate", 0, "path invalidated");
-        } else {
-            openvfsfuse_log(fusePath, "invalidate", res, "invalidate failed");
-        }
+    auto *ctx = fuse_get_context();
+    if (!ctx || !ctx->fuse) {
+        return;
+    }
+    const auto fusePath = getInternalPath(path);
+    std::string fuseStr = "/" + fusePath.string();
+    int res = fuse_invalidate_path(ctx->fuse, fuseStr.c_str());
+    if (res == 0 || res == -ENOENT) {
+        openvfsfuse_log(fuseStr, "invalidate", 0, "path invalidated");
+    } else {
+        openvfsfuse_log(fuseStr, "invalidate", res, "invalidate failed");
     }
 }
 
