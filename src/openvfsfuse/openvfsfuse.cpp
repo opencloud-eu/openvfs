@@ -677,7 +677,12 @@ static int openVFSfuse_setxattr(const char *orig_path, const char *name, const c
 {
     // When a non-client process writes user.openvfs.data, strip keys listed
     // in stripXattrKeys (configured via -x flag). This prevents file managers
-    // from copying identity/protection state on copy+paste.
+    // from copying per-file identity fields (fileid, immutable, syncerror)
+    // on copy+paste, while preserving user-set metadata (comments, tags, etag).
+    //
+    // We selectively remove keys rather than stripping all openvfs xattrs
+    // because some fields (etag, pinstate, size) are harmless or even useful
+    // to keep, and future user-defined metadata should survive copies.
     if (std::string_view(name) == OpenVFS::Constants::XAttributeNames::Data
         && !VFSFuseContext::instance().stripXattrKeys().empty()) {
         auto *context = fuse_get_context();
@@ -686,15 +691,15 @@ static int openVFSfuse_setxattr(const char *orig_path, const char *name, const c
                 auto j = nlohmann::json::from_msgpack(std::vector<uint8_t>(value, value + size));
                 bool modified = false;
                 for (const auto &key : VFSFuseContext::instance().stripXattrKeys()) {
-                    if (j.contains(key) && j[key].is_string() && !j[key].get<std::string>().empty()) {
-                        j[key] = "";
+                    if (j.contains(key)) {
+                        j.erase(key);
                         modified = true;
                     }
                 }
                 if (modified) {
                     auto cleaned = nlohmann::json::to_msgpack(j);
                     const auto path = getInternalPath(orig_path);
-                    openvfsfuse_log(path, "setxattr", 0, "stripped protected keys from copy by pid %d", context->pid);
+                    openvfsfuse_log(path, "setxattr", 0, "stripped keys from copy by pid %d", context->pid);
                     return Xattr::setxattr(path, name, reinterpret_cast<const char *>(cleaned.data()), cleaned.size(), flags);
                 }
             } catch (...) {
