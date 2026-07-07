@@ -148,6 +148,9 @@ std::string getcallername(fuse_context *context)
 static SharedMap _jobs;
 static SocketThread _socketThread("SocketThread", _jobs);
 
+// Global fuse pointer for invalidation from socket thread
+static struct fuse *_fuseInstance = nullptr;
+
 static int _transfer_id{12};
 
 
@@ -178,6 +181,12 @@ void openvfsfuse_log(const std::string &path, const char *action, int returncode
 static void *openVFSfuse_init(struct fuse_conn_info *, fuse_config *)
 {
     openvfsfuse_log("/path", "_init", 1, "**** INIT called");
+
+    // Store fuse instance for invalidation from socket thread
+    auto *ctx = fuse_get_context();
+    if (ctx) {
+        _fuseInstance = ctx->fuse;
+    }
 
     return NULL;
 }
@@ -724,6 +733,22 @@ static int openVFSfuse_removexattr(const char *orig_path, const char *name)
 {
     const auto path = getInternalPath(orig_path);
     return Xattr::removexattr(path, name);
+}
+
+void openvfsfuse_invalidate_path(const std::string &path)
+{
+    auto *ctx = fuse_get_context();
+    if (!ctx || !ctx->fuse) {
+        return;
+    }
+    const auto fusePath = getInternalPath(path);
+    std::string fuseStr = "/" + fusePath.string();
+    int res = fuse_invalidate_path(ctx->fuse, fuseStr.c_str());
+    if (res == 0 || res == -ENOENT) {
+        openvfsfuse_log(fuseStr, "invalidate", 0, "path invalidated");
+    } else {
+        openvfsfuse_log(fuseStr, "invalidate", res, "invalidate failed");
+    }
 }
 
 int initializeOpenVFSFuse(openVFSfuse_Args &openVFSArgs)

@@ -27,4 +27,5 @@ struct openVFSfuse_Args
 };
 
 int initializeOpenVFSFuse(openVFSfuse_Args &openVFSArgs);
+void openvfsfuse_invalidate_path(const std::string &path);
 void openvfsfuse_log(const std::string &path, const char *action, int returncode, const char *format, ...);
