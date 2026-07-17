@@ -55,6 +55,7 @@ public:
         , _rootHandle(open(_mountPoint.c_str(), 0))
         , _appsNoHydrateFull(args.appsNoHydrateFull)
         , _appsNoHydrateEndsWith(args.appsNoHydrateEndsWith)
+        , _debugEnabled(args.debugEnabled)
     {
         assert(!_instance);
 
@@ -100,6 +101,8 @@ public:
             || std::ranges::find_if(_appsNoHydrateEndsWith, [app](const auto &a) { return app.ends_with(a); }) != _appsNoHydrateEndsWith.cend();
     }
 
+    bool debugEnabled() const { return _debugEnabled; }
+
 private:
     static VFSFuseContext *_instance;
     std::filesystem::path _mountPoint;
@@ -107,6 +110,7 @@ private:
     int _rootHandle;
     std::vector<std::string> _appsNoHydrateFull;
     std::vector<std::string> _appsNoHydrateEndsWith;
+    bool _debugEnabled;
 };
 
 VFSFuseContext *VFSFuseContext::_instance = nullptr;
@@ -153,6 +157,9 @@ static int _transfer_id{12};
 
 void openvfsfuse_log(const std::string &path, const char *action, int returncode, const char *format, ...)
 {
+    if (!VFSFuseContext::instance().debugEnabled()) {
+        return;
+    }
     // FIXME - whitelist of pathes that are not logged at all?
     if (path == "./.OpenCloudSync.log")
         return;

@@ -77,6 +77,7 @@ std::optional<openVFSfuse_Args> processArgs(int argc, char *argv[])
         case 'd':
             // enable debug logging, implies -f
             out.fuseArgv.emplace_back("-d");
+            out.debugEnabled = true;
             std::cout << "openVFSfuse running with debug log enabled" << std::endl;
             break;
         case 'i': {

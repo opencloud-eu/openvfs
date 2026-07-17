@@ -24,6 +24,7 @@ struct openVFSfuse_Args
     std::vector<std::string> fuseArgv;
     std::vector<std::string> appsNoHydrateFull; // these apps are not permitted to cause a dehydration
     std::vector<std::string> appsNoHydrateEndsWith;
+    bool debugEnabled = false; // checked in the central logging function if logging is enabled
 };
 
 int initializeOpenVFSFuse(openVFSfuse_Args &openVFSArgs);
