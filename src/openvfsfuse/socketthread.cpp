@@ -137,7 +137,7 @@ bool SocketThread::socketSendMsg(std::shared_ptr<MsgData> msgData)
     }
 
     const json j = {
-        {"id", std::to_string(msgData->id)}, {"arguments", {{"file", msgData->file}, {"fileId", msgData->fileId}, {"requster", msgData->requester}}}};
+        {"id", std::to_string(msgData->id)}, {"arguments", {{"file", msgData->file}, {"fileId", msgData->fileId}, {"requester", msgData->requester}}}};
 
     msg += ":";
     msg += j.dump();
