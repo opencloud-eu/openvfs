@@ -12,6 +12,7 @@
 #define _X_SOURCE 500
 #endif
 
+#include <chrono>
 #include <filesystem>
 #include <vector>
 
@@ -24,6 +25,10 @@ struct openVFSfuse_Args
     std::vector<std::string> fuseArgv;
     std::vector<std::string> appsNoHydrateFull; // these apps are not permitted to cause a dehydration
     std::vector<std::string> appsNoHydrateEndsWith;
+    // Upper bound for how long open() blocks waiting for the desktop client to
+    // hydrate a file. A large file over a slow link is legitimately slow, an
+    // unresponsive client is not -- so this is configurable.
+    std::chrono::milliseconds hydrationTimeout = std::chrono::seconds(300);
     bool debugEnabled = false; // checked in the central logging function if logging is enabled
 };
 
