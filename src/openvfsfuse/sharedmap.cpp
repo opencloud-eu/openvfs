@@ -18,12 +18,18 @@
 
 #include "sharedmap.h"
 
-SharedMap::SharedMap() { }
+SharedMap::SharedMap()
+    : _pid(0)
+{
+}
 
 void SharedMap::insert(int key, const HydJob &value)
 {
-    std::lock_guard<std::mutex> lock(_mutex);
-    _data[key] = value;
+    {
+        std::lock_guard<std::mutex> lock(_mutex);
+        _data[key] = value;
+    }
+    _cv.notify_all();
 }
 
 bool SharedMap::get(int key, HydJob &outValue)
@@ -39,25 +45,57 @@ bool SharedMap::get(int key, HydJob &outValue)
 
 bool SharedMap::set(int key, const HydJob &value)
 {
-    std::lock_guard<std::mutex> lock(_mutex);
+    bool found{false};
+    {
+        std::lock_guard<std::mutex> lock(_mutex);
 
-    auto it = _data.find(key);
-    if (it != _data.end()) {
-        _data[key] = value;
-        return true;
+        auto it = _data.find(key);
+        if (it != _data.end()) {
+            it->second = value;
+            found = true;
+        }
     }
-    return false;
+    if (found) {
+        _cv.notify_all();
+    }
+    return found;
+}
+
+HydJobResult SharedMap::waitForJob(int key, std::chrono::milliseconds timeout)
+{
+    std::unique_lock<std::mutex> lock(_mutex);
+
+    const bool settled = _cv.wait_for(lock, timeout, [this, key] {
+        const auto it = _data.find(key);
+        return it == _data.end() || it->second.state != HydJobState::Running;
+    });
+
+    if (!settled) {
+        return HydJobResult::TimedOut;
+    }
+
+    const auto it = _data.find(key);
+    if (it == _data.end()) {
+        return HydJobResult::Lost;
+    }
+    return it->second.state == HydJobState::Success ? HydJobResult::Succeeded : HydJobResult::Failed;
 }
 
 bool SharedMap::remove(int id)
 {
-    std::lock_guard<std::mutex> lock(_mutex);
-    auto it = _data.find(id);
-    if (it != _data.end()) {
-        _data.erase(id);
-        return true;
+    bool found{false};
+    {
+        std::lock_guard<std::mutex> lock(_mutex);
+        auto it = _data.find(id);
+        if (it != _data.end()) {
+            _data.erase(it);
+            found = true;
+        }
     }
-    return false;
+    if (found) {
+        _cv.notify_all();
+    }
+    return found;
 }
 
 void SharedMap::setDesktopClientPid(long pid)

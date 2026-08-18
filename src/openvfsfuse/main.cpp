@@ -1,6 +1,7 @@
 #include "openvfsfuse.h"
 
 #include <cassert>
+#include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <getopt.h>
@@ -37,6 +38,7 @@ namespace {
     const std::string ConfigIgnoreAppsStr = "ignoreApps";
     const std::string ConfigByNameStr = "byName";
     const std::string ConfigEndsWith = "endsWith";
+    const std::string ConfigHydrationTimeoutSecondsStr = "hydrationTimeoutSeconds";
 }
 
 void usage(char *name)
@@ -82,10 +84,30 @@ std::optional<openVFSfuse_Args> processArgs(int argc, char *argv[])
             break;
         case 'i': {
             std::ifstream ifs(optarg);
-            json data = json::parse(ifs);
+            if (!ifs) {
+                std::cerr << "Failed to open config file " << optarg << std::endl;
+                return {};
+            }
+            json data;
+            try {
+                data = json::parse(ifs);
+            } catch (const json::exception &e) {
+                std::cerr << "Failed to parse config file " << optarg << ": " << e.what() << std::endl;
+                return {};
+            }
 
-            out.appsNoHydrateFull = data[ConfigIgnoreAppsStr][ConfigByNameStr].get<std::vector<std::string>>();
-            out.appsNoHydrateEndsWith = data[ConfigIgnoreAppsStr][ConfigEndsWith].get<std::vector<std::string>>();
+            // Every setting is optional so that a config file written for an
+            // older version keeps working.
+            const auto ignoreApps = data.value(ConfigIgnoreAppsStr, json::object());
+            out.appsNoHydrateFull = ignoreApps.value(ConfigByNameStr, std::vector<std::string>{});
+            out.appsNoHydrateEndsWith = ignoreApps.value(ConfigEndsWith, std::vector<std::string>{});
+
+            const auto timeoutSeconds = data.value(ConfigHydrationTimeoutSecondsStr, 0);
+            if (timeoutSeconds > 0) {
+                out.hydrationTimeout = std::chrono::seconds(timeoutSeconds);
+            } else if (timeoutSeconds < 0) {
+                std::cerr << ConfigHydrationTimeoutSecondsStr << " must be positive, keeping the default" << std::endl;
+            }
             break;
         }
         case 'o':
