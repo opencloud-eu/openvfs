@@ -72,7 +72,8 @@ public:
 
     /// Add a message to the thread queue
     /// @param[in] data - thread specific message information
-    void PostMsg(std::shared_ptr<MsgData> msg);
+    /// @return False if the thread is shutting down and the message was dropped.
+    bool PostMsg(std::shared_ptr<MsgData> msg);
 
     /// Get size of thread message queue.
     size_t GetQueueSize();
