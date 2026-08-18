@@ -1,11 +1,37 @@
 {
     "ignoreApps": {
         "byName": [
-            "/usr/bin/dolphin"
         ],
         "endsWith": [
+            "dolphin",
             "kioworker",
-            "baloo_file"
+            "baloo_file",
+            "baloo_file_extractor",
+            "nautilus",
+            "nemo",
+            "caja",
+            "thunar",
+            "pcmanfm",
+            "pcmanfm-qt",
+            "thumbnailer",
+            "gnome-thumbnail-font",
+            "gnome-thumbnail-factory",
+            "tumblerd",
+            "tracker-miner-fs",
+            "tracker-miner-fs-3",
+            "tracker-extract",
+            "tracker-extract-3",
+            "localsearch-3",
+            "localsearch-extractor-3",
+            "gvfsd",
+            "gvfsd-metadata",
+            "gvfsd-trash",
+            "updatedb",
+            "updatedb.mlocate",
+            "updatedb.plocate",
+            "clamd",
+            "clamscan",
+            "freshclam"
         ]
     },
     "hydrationTimeoutSeconds": 300
