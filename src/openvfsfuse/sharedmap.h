@@ -19,16 +19,38 @@
 #ifndef SHAREDMAP_H
 #define SHAREDMAP_H
 
+#include <chrono>
+#include <condition_variable>
 #include <iostream>
 #include <map>
 #include <mutex>
 #include <string>
 #include <thread>
 
+/**
+ * The values a hydration job can take. A job starts out Running and is moved to
+ * one of the other states by the socket thread.
+ */
+namespace HydJobState {
+constexpr int Success = 0;
+constexpr int Running = 1;
+constexpr int Failed = -1;
+}
+
 struct HydJob
 {
 public:
     int state;
+};
+
+/**
+ * Outcome of waiting for a hydration job to leave the Running state.
+ */
+enum class HydJobResult {
+    Succeeded, ///< the client reported the file as hydrated
+    Failed, ///< the client reported an error, or the request could not be sent
+    TimedOut, ///< the client did not answer within the timeout
+    Lost, ///< the job vanished from the map, which should not happen
 };
 
 class SharedMap
@@ -41,6 +63,15 @@ public:
     bool remove(int id);
     bool set(int key, const HydJob &value);
 
+    /**
+     * Block until the job identified by @p key leaves the Running state, or
+     * until @p timeout has elapsed.
+     *
+     * The wait is bounded by wall-clock time rather than by a number of polls,
+     * and a state change is observed as soon as the socket thread publishes it.
+     */
+    HydJobResult waitForJob(int key, std::chrono::milliseconds timeout);
+
     void printAll();
     void setDesktopClientPid(long pid);
     long desktopClientPid();
@@ -48,6 +79,7 @@ public:
 private:
     std::map<int, HydJob> _data;
     std::mutex _mutex;
+    std::condition_variable _cv;
     long _pid;
 };
 

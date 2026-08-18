@@ -159,6 +159,9 @@ bool SocketThread::socketSendMsg(std::shared_ptr<MsgData> msgData)
     if (value < 0) {
         perror("write");
         close(_socket);
+        // Mark the descriptor as gone so we do not keep reading from and
+        // writing to a closed fd on every subsequent tick.
+        _socket = -1;
         return false;
     }
 
@@ -169,11 +172,16 @@ bool SocketThread::socketSendMsg(std::shared_ptr<MsgData> msgData)
 
 void SocketThread::processSocketInput()
 {
+    if (_socket < 0) {
+        return;
+    }
+
     // The socket is a SOCK_STREAM and carries no message boundaries: a single
     // read may return a fragment of a message, several messages at once, or
     // both. Accumulate into _rxBuffer and only dispatch complete lines.
     char buf[4096];
-    while (true) {
+    // The upper bound also stops a flooding peer from keeping us in this loop.
+    while (_rxBuffer.size() <= MaxRxBufferSize) {
         const ssize_t n = read(_socket, buf, sizeof(buf));
         if (n > 0) {
             _rxBuffer.append(buf, static_cast<size_t>(n));
@@ -251,9 +259,9 @@ void SocketThread::handleReceivedMsg(const std::string &msg)
         }
 
         if (id > 0) {
-            int res{-1}; // Default set to fail
+            int res{HydJobState::Failed}; // Default set to fail
             if (status == "OK") {
-                res = 0; // good!
+                res = HydJobState::Success; // good!
             } else {
                 cout << "ERROR from socket API for Id" << id << endl;
             }
@@ -351,10 +359,10 @@ void SocketThread::ExitThread()
 //----------------------------------------------------------------------------
 // PostMsg
 //----------------------------------------------------------------------------
-void SocketThread::PostMsg(std::shared_ptr<MsgData> data)
+bool SocketThread::PostMsg(std::shared_ptr<MsgData> data)
 {
     if (m_exit.load())
-        return;
+        return false;
     assert(m_thread);
 
     // Create a new ThreadMsg
@@ -364,6 +372,7 @@ void SocketThread::PostMsg(std::shared_ptr<MsgData> data)
     std::unique_lock<std::mutex> lk(m_mutex);
     m_queue.push(threadMsg);
     m_cv.notify_one();
+    return true;
 }
 
 //----------------------------------------------------------------------------
@@ -424,11 +433,12 @@ void SocketThread::Process()
 
             if (!socketSendMsg(msgData)) {
                 cout << "Failed to send msg " << msgData->id << ": " << msgData->msg.c_str() << endl;
-            } else {
+                // The job was registered by the caller before it posted the
+                // message, so a failure to send has to be published as such.
+                // Otherwise the caller waits out its full timeout for a
+                // request that never left the machine.
                 if (msgData->id > 0) {
-                    const HydJob hj{.state = 1};
-                    _sharedMap.insert(msgData->id, hj);
-                    cout << "Storing sent message ID" << msgData->id << endl;
+                    _sharedMap.set(msgData->id, HydJob{.state = HydJobState::Failed});
                 }
             }
             break;

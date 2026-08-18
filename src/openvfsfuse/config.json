@@ -7,5 +7,6 @@
             "kioworker",
             "baloo_file"
         ]
-    }
+    },
+    "hydrationTimeoutSeconds": 300
 }
