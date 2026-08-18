@@ -84,9 +84,9 @@ namespace Constants {
     {
         switch (name) {
         case PinStates::OnlineOnly:
-            return "hydrated";
+            return "onlineonly";
         case PinStates::AlwaysLocal:
-            return "dehydrated";
+            return "alwayslocal";
         case PinStates::Inherited:
             return "inherited";
         case PinStates::Excluded:
