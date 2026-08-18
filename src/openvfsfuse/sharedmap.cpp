@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-FileCopyrightText: 2025 Klaas Freitag <k.freitag@opencloud.eu>
+
 /*
  * openvfsfuse - a Fuse layer to handle virtual filesystem items of cloud storage
  * Copyright (C) 2025  Klaas Freitag <k.freitag@opencloud.eu>

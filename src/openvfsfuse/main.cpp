@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-FileCopyrightText: 2025 Hannah von Reth <h.vonreth@opencloud.eu>
+// SPDX-FileCopyrightText: 2025 Klaas Freitag <k.freitag@opencloud.eu>
+
 #include "openvfsfuse.h"
 
 #include <cassert>
