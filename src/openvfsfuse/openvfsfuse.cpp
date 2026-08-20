@@ -120,6 +120,33 @@ auto getInternalPath(const std::string &path)
     return VFSFuseContext::instance().getInternalPath(path);
 }
 
+// FUSE reports the *thread* id of the caller in fuse_context::pid, while the
+// desktop client announces its process id over the socket API. A client that
+// writes the content it downloaded from a worker thread therefore fails the
+// identity check in openVFSfuse_open(), and its own write is treated as a
+// foreign access that needs hydrating -- which deadlocks the very hydration it
+// is answering.
+//
+// A thread of the client is visible as /proc/<pid>/task/<tid>, so one stat()
+// answers the question without reading or parsing anything. On platforms
+// without /proc only the direct comparison applies, which is what was there
+// before.
+bool callerBelongsToProcess(pid_t callerThreadId, long processId)
+{
+    if (callerThreadId <= 0 || processId <= 0) {
+        return false;
+    }
+    if (callerThreadId == processId) {
+        return true;
+    }
+#ifdef __APPLE__
+    return false;
+#else
+    std::error_code ignored;
+    return std::filesystem::exists(std::format("/proc/{}/task/{}", processId, callerThreadId), ignored);
+#endif
+}
+
 /*
  * Returns the name of the process which accessed the file system.
  */
@@ -486,7 +513,7 @@ static int openVFSfuse_open(const char *orig_path, struct fuse_file_info *fi)
 
     // The desktop client must not be blocked from accessing the file
     // to be able to overwrite it.
-    if (fuse_get_context()->pid == _jobs.desktopClientPid()) {
+    if (callerBelongsToProcess(fuse_get_context()->pid, _jobs.desktopClientPid())) {
         openvfsfuse_log(path, "open", res, "Desktop client tries to access, bypassing!");
     } else {
         if (const auto attribs = OpenVFS::PlaceHolderAttributes::fromAttributes(path)) {
