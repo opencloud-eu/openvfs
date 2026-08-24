@@ -100,7 +100,6 @@ std::optional<OpenVFS::PlaceHolderAttributes> OpenVFS::PlaceHolderAttributes::fr
 {
     const auto data = Xattr::CPP::getxattr(absolutePath, OpenVFS::Constants::XAttributeNames::Data);
     if (!data.has_value()) {
-        std::cerr << "No placeholder attributes found for: " << absolutePath << std::endl;
         return std::nullopt;
     }
     return fromData(absolutePath, std::vector<uint8_t>{data.value().cbegin(), data.value().cend()});
