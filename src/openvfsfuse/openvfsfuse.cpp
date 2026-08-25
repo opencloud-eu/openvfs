@@ -502,6 +502,26 @@ static int openVFSfuse_utimens(const char *orig_path, const struct timespec ts[2
     return 0;
 }
 
+static int openVFSfuse_create(const char *orig_path, mode_t mode, struct fuse_file_info *fi)
+{
+    const auto path = getInternalPath(orig_path);
+
+    // A file that does not exist yet cannot be a placeholder, so it needs
+    // neither hydration nor placeholder attributes: getxattr() reports a
+    // hydrated default for a file that carries none.
+    const int res = open(path.c_str(), fi->flags, mode);
+    openvfsfuse_log(path, "create", res, "create %o", mode);
+
+    if (res == -1) {
+        return -errno;
+    }
+
+    lchown(path.c_str(), fuse_get_context()->uid, fuse_get_context()->gid);
+    fi->fh = res;
+
+    return 0;
+}
+
 static int openVFSfuse_open(const char *orig_path, struct fuse_file_info *fi)
 {
     int res{0};
@@ -781,6 +801,7 @@ int initializeOpenVFSFuse(openVFSfuse_Args &openVFSArgs)
     openVFSfuse_oper.truncate = openVFSfuse_truncate;
     openVFSfuse_oper.utimens = openVFSfuse_utimens;
     openVFSfuse_oper.open = openVFSfuse_open;
+    openVFSfuse_oper.create = openVFSfuse_create;
     openVFSfuse_oper.read = openVFSfuse_read;
     openVFSfuse_oper.write = openVFSfuse_write;
     openVFSfuse_oper.statfs = openVFSfuse_statfs;
