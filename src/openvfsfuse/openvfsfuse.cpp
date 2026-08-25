@@ -638,30 +638,17 @@ static int openVFSfuse_read(const char *orig_path, char *buf, size_t size, off_t
 
 static int openVFSfuse_write(const char *orig_path, const char *buf, size_t size, off_t offset, struct fuse_file_info *fi)
 {
-    int fd;
     int res;
     const auto path = getInternalPath(orig_path);
-    (void)fi;
 
-    fd = open(path.c_str(), O_WRONLY);
-    if (fd == -1) {
+    openvfsfuse_log(path, "write", 0, "write %d bytes at offset %d", size, offset);
+    res = pwrite(fi->fh, buf, size, offset);
+    if (res == -1) {
         res = -errno;
-        openvfsfuse_log(path, "write", -1, "write %d bytes to %s at offset %d", size, path.c_str(), offset);
-
-        return res;
+        openvfsfuse_log(path, "write", -1, "write %d bytes at offset %d", size, offset);
     } else {
-        openvfsfuse_log(path, "write", 0, "write %d bytes to %s at offset %d", size, path.c_str(), offset);
+        openvfsfuse_log(path, "write", 0, "%d bytes written at offset %d", res, offset);
     }
-
-    res = pwrite(fd, buf, size, offset);
-
-    if (res == -1)
-        res = -errno;
-    else
-        openvfsfuse_log(path, "write", 0, "%d bytes written to %s at offset %d", res, path.c_str(), offset);
-
-    close(fd);
-
 
     return res;
 }
