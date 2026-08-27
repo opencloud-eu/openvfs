@@ -89,7 +89,10 @@ private:
     int initSocket(const std::string& socketPath);
 
     bool socketSendMsg(std::shared_ptr<MsgData>);
-    std::string readSocket();
+
+    /// Drain everything readable from the socket into _rxBuffer and dispatch
+    /// every complete (newline terminated) message it contains.
+    void processSocketInput();
     void handleReceivedMsg(const std::string &msg);
 
     /// Entry point for the worker thread
@@ -113,6 +116,10 @@ private:
     std::future<void> m_threadStartFuture;
 
     std::atomic<int> _socket;
+
+    /// Receive buffer holding the bytes read from the socket that do not form
+    /// a complete message yet. Only touched by the worker thread.
+    std::string _rxBuffer;
 
     SharedMap &_sharedMap;
 };
