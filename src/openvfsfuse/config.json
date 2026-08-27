@@ -5,7 +5,8 @@
         ],
         "endsWith": [
             "kioworker",
-            "baloo_file"
+            "baloo_file",
+            "baloo_filemetadata_temp_extractor"
         ]
     }
 }
