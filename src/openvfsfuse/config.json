@@ -7,6 +7,7 @@
             "kioworker",
             "baloo_file",
             "baloo_file_extractor",
+            "baloo_filemetadata_temp_extractor",
             "nautilus",
             "nemo",
             "caja",
