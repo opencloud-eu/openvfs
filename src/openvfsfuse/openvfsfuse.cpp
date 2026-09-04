@@ -20,6 +20,7 @@
 #include "socketthread.h"
 
 #include <chrono>
+#include <cstdint>
 #include <cstring>
 #include <dirent.h>
 #include <errno.h>
@@ -471,17 +472,21 @@ static int openVFSfuse_chown(const char *orig_path, uid_t uid, gid_t gid, fuse_f
     return res;
 }
 
-static int openVFSfuse_truncate(const char *orig_path, off_t size, fuse_file_info *)
+static int openVFSfuse_truncate(const char *orig_path, off_t size, fuse_file_info *fi)
 {
     int res;
 
     const auto path = getInternalPath(orig_path);
-    res = truncate(path.c_str(), size);
-    openvfsfuse_log(path, "truncate", res, "truncate to %d bytes", size);
-
+    // fi is set when the truncation goes through an open descriptor and null
+    // for a path-based truncate(). Truncating through a descriptor must not be
+    // re-checked against the file's mode, so use it when it is there.
+    res = fi ? ftruncate(fi->fh, size) : truncate(path.c_str(), size);
     if (res == -1) {
-        return -errno;
+        const auto error = errno;
+        openvfsfuse_log(path, "truncate", -1, "truncate to %jd bytes", static_cast<std::intmax_t>(size));
+        return -error;
     }
+    openvfsfuse_log(path, "truncate", 0, "truncate to %jd bytes", static_cast<std::intmax_t>(size));
 
     return 0;
 }
