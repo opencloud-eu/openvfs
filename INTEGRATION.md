@@ -15,6 +15,16 @@ The openvfs binary accepts the following command-line parameters:
 
 The FUSE layer must be unmounted when the desktop client shuts down or when a sync connection is removed.
 
+## Configuration File
+
+The file passed via `-i` is JSON. All keys are optional; a missing key falls back to the built-in default.
+
+* `ignoreApps.byName`: List of absolute executable paths that must not trigger a hydration. A matching caller receives `EPERM` from `open()` instead of the file being downloaded.
+* `ignoreApps.endsWith`: List of suffixes matched against the calling executable's path, for the same purpose. This is the distribution-independent way to name a binary, and `-thumbnailer` catches the freedesktop thumbnailer convention in one entry.
+* `hydrationTimeoutSeconds`: How long `open()` blocks waiting for the client to hydrate a file before giving up and returning `ETIMEDOUT`. Defaults to `300`. Raise it if large files are legitimately transferred over slow links; the point of the bound is to keep an unresponsive client from wedging the calling application indefinitely.
+
+The shipped `config.json` is a cross-desktop starting point, not an exhaustive list. Any indexer, thumbnailer, or antivirus that opens files as a matter of routine will otherwise download the whole sync root.
+
 ## Socket API Communication
 
 OpenVFS communicates with the desktop client over a local, unauthenticated Unix socket — the so-called socket API. This bidirectional channel is already used by both OpenCloud and Nextcloud clients for file manager integration.
@@ -48,4 +58,8 @@ Expected response fields:
 * `arguments`: Optional object that may contain an `error` field describing the failure.
 
 On a successful response, the file is considered hydrated and its content is available locally.
+
+Messages are newline-delimited on a stream socket, so a reply may be split across several writes and several replies may be batched into one. openVFS reassembles them; the client need not size its replies to any particular limit.
+
+If the client reports an error, `open()` fails with `EIO`. If it does not answer within `hydrationTimeoutSeconds`, `open()` fails with `ETIMEDOUT`.
 
