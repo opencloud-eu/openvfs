@@ -20,6 +20,7 @@
 #include "socketthread.h"
 
 #include <chrono>
+#include <cstdint>
 #include <cstring>
 #include <dirent.h>
 #include <errno.h>
@@ -502,6 +503,33 @@ static int openVFSfuse_utimens(const char *orig_path, const struct timespec ts[2
     return 0;
 }
 
+static int openVFSfuse_create(const char *orig_path, mode_t mode, struct fuse_file_info *fi)
+{
+    const auto path = getInternalPath(orig_path);
+
+    const int res = open(path.c_str(), fi->flags, mode);
+    if (res == -1) {
+        const auto error = errno;
+        openvfsfuse_log(path, "create", -1, "create %o", static_cast<unsigned int>(mode));
+        return -error;
+    }
+
+    if (fchown(res, fuse_get_context()->uid, fuse_get_context()->gid) == -1) {
+        const auto error = errno;
+        const auto cleanupError = unlink(path.c_str()) == -1 ? errno : 0;
+        close(res);
+        openvfsfuse_log(path, "create", -1, "set ownership after create %o", static_cast<unsigned int>(mode));
+        if (cleanupError != 0) {
+            openvfsfuse_log(path, "create", -1, "failed to remove incomplete file: errno %d", cleanupError);
+        }
+        return -error;
+    }
+    openvfsfuse_log(path, "create", 0, "create %o", static_cast<unsigned int>(mode));
+    fi->fh = res;
+
+    return 0;
+}
+
 static int openVFSfuse_open(const char *orig_path, struct fuse_file_info *fi)
 {
     int res{0};
@@ -638,30 +666,17 @@ static int openVFSfuse_read(const char *orig_path, char *buf, size_t size, off_t
 
 static int openVFSfuse_write(const char *orig_path, const char *buf, size_t size, off_t offset, struct fuse_file_info *fi)
 {
-    int fd;
     int res;
     const auto path = getInternalPath(orig_path);
-    (void)fi;
 
-    fd = open(path.c_str(), O_WRONLY);
-    if (fd == -1) {
+    openvfsfuse_log(path, "write", 0, "write %zu bytes at offset %jd", size, static_cast<std::intmax_t>(offset));
+    res = pwrite(fi->fh, buf, size, offset);
+    if (res == -1) {
         res = -errno;
-        openvfsfuse_log(path, "write", -1, "write %d bytes to %s at offset %d", size, path.c_str(), offset);
-
-        return res;
+        openvfsfuse_log(path, "write", -1, "write %zu bytes at offset %jd", size, static_cast<std::intmax_t>(offset));
     } else {
-        openvfsfuse_log(path, "write", 0, "write %d bytes to %s at offset %d", size, path.c_str(), offset);
+        openvfsfuse_log(path, "write", 0, "%d bytes written at offset %jd", res, static_cast<std::intmax_t>(offset));
     }
-
-    res = pwrite(fd, buf, size, offset);
-
-    if (res == -1)
-        res = -errno;
-    else
-        openvfsfuse_log(path, "write", 0, "%d bytes written to %s at offset %d", res, path.c_str(), offset);
-
-    close(fd);
-
 
     return res;
 }
@@ -794,6 +809,7 @@ int initializeOpenVFSFuse(openVFSfuse_Args &openVFSArgs)
     openVFSfuse_oper.truncate = openVFSfuse_truncate;
     openVFSfuse_oper.utimens = openVFSfuse_utimens;
     openVFSfuse_oper.open = openVFSfuse_open;
+    openVFSfuse_oper.create = openVFSfuse_create;
     openVFSfuse_oper.read = openVFSfuse_read;
     openVFSfuse_oper.write = openVFSfuse_write;
     openVFSfuse_oper.statfs = openVFSfuse_statfs;
