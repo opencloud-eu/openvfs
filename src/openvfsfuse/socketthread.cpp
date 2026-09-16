@@ -24,6 +24,7 @@
 #include "sharedmap.h"
 #include "strtools.h"
 
+#include <cerrno>
 #include <cstring>
 #include <fcntl.h>
 #include <iostream>
@@ -41,6 +42,13 @@ using namespace std;
 #define MSG_EXIT_THREAD 1
 #define MSG_POST_USER_DATA 2
 #define MSG_TIMER 3
+
+namespace {
+/// Upper bound for the receive buffer. A message from the socket API is a
+/// single JSON line and stays far below this; anything larger means the peer
+/// is not speaking the protocol.
+constexpr size_t MaxRxBufferSize = 1024 * 1024;
+}
 
 using json = nlohmann::json;
 
@@ -151,6 +159,9 @@ bool SocketThread::socketSendMsg(std::shared_ptr<MsgData> msgData)
     if (value < 0) {
         perror("write");
         close(_socket);
+        // Mark the descriptor as gone so we do not keep reading from and
+        // writing to a closed fd on every subsequent tick.
+        _socket = -1;
         return false;
     }
 
@@ -159,85 +170,116 @@ bool SocketThread::socketSendMsg(std::shared_ptr<MsgData> msgData)
     // openvfsfuse_log(socket_path.c_str(), "socket send", value, "Message: %s", msg.c_str());
 }
 
-std::string SocketThread::readSocket()
+void SocketThread::processSocketInput()
 {
-    // read answer FIXME: Split messages by \n and keep the rest
-    char buf[1024];
-    ssize_t n = read(_socket, buf, sizeof(buf) - 1);
-    if (n <= 0)
-        return std::string();
-    return std::string(buf, n);
-}
-
-void SocketThread::handleReceivedMsg(const std::string &rawmsg)
-{
-    if (rawmsg.empty()) {
-        cout << "Received Message empty" << endl;
+    if (_socket < 0) {
         return;
     }
 
-    auto copies = StrTools::split(rawmsg, 0x000A);
-
-    for (const string &msg : copies) {
-        string msgType, msgAttr;
-        if (msg.empty()) {
+    // The socket is a SOCK_STREAM and carries no message boundaries: a single
+    // read may return a fragment of a message, several messages at once, or
+    // both. Accumulate into _rxBuffer and only dispatch complete lines.
+    char buf[4096];
+    // The upper bound also stops a flooding peer from keeping us in this loop.
+    while (_rxBuffer.size() <= MaxRxBufferSize) {
+        const ssize_t n = read(_socket, buf, sizeof(buf));
+        if (n > 0) {
+            _rxBuffer.append(buf, static_cast<size_t>(n));
             continue;
         }
-
-        cout << "Handle single message " << msg << endl;
-
-        size_t found = msg.find(':');
-        if (found != string::npos) {
-            msgType = msg.substr(0, found);
-            msgAttr = msg.substr(found + 1, string::npos);
-        } else {
-            std::cerr << "Invalid message format: " << msg << std::endl;
+        if (n == 0) {
+            // Peer closed the connection. Whatever is left in the buffer can
+            // never be completed, so drop it rather than misparsing it later.
+            if (!_rxBuffer.empty()) {
+                std::cerr << "Socket closed with " << _rxBuffer.size() << " bytes of incomplete message, discarding" << std::endl;
+                _rxBuffer.clear();
+            }
+            return;
+        }
+        if (errno == EINTR) {
             continue;
         }
+        // EAGAIN on the non-blocking socket simply means there is nothing more
+        // to read right now. (EWOULDBLOCK is an alias for it on Linux and macOS.)
+        if (errno != EAGAIN) {
+            perror("read");
+            return;
+        }
+        break;
+    }
 
-        // FIXME: Think if splitting by newline makes sense
+    size_t pos;
+    while ((pos = _rxBuffer.find('\n')) != std::string::npos) {
+        handleReceivedMsg(_rxBuffer.substr(0, pos));
+        _rxBuffer.erase(0, pos + 1);
+    }
 
-        if (msgType == "V2/HYDRATE_FILE_RESULT") {
-            int id = -1;
-            std::string status;
+    // A peer that never sends a newline must not be able to grow our buffer
+    // without bound.
+    if (_rxBuffer.size() > MaxRxBufferSize) {
+        std::cerr << "Discarding " << _rxBuffer.size() << " bytes of unterminated message from the socket API" << std::endl;
+        _rxBuffer.clear();
+    }
+}
 
-            try {
-                const auto j = json::parse(msgAttr);
-                id = std::stoi(j["id"].get<string>());
-                const auto arguments = j["arguments"].get<json>();
-                if (arguments.contains("error")) {
-                    std::cerr << "Error from socket API for Id " << id << ": " << arguments["error"].get<string>() << std::endl;
-                } else {
-                    status = arguments["status"].get<string>();
-                }
-            } catch (json::exception &e) {
-                std::cerr << "Invalid JSON message: " << msgAttr << e.what() << std::endl;
-                continue;
+void SocketThread::handleReceivedMsg(const std::string &msg)
+{
+    string msgType, msgAttr;
+    if (msg.empty()) {
+        return;
+    }
+
+    cout << "Handle single message " << msg << endl;
+
+    size_t found = msg.find(':');
+    if (found != string::npos) {
+        msgType = msg.substr(0, found);
+        msgAttr = msg.substr(found + 1, string::npos);
+    } else {
+        std::cerr << "Invalid message format: " << msg << std::endl;
+        return;
+    }
+
+    if (msgType == "V2/HYDRATE_FILE_RESULT") {
+        int id = -1;
+        std::string status;
+
+        try {
+            const auto j = json::parse(msgAttr);
+            id = std::stoi(j["id"].get<string>());
+            const auto arguments = j["arguments"].get<json>();
+            if (arguments.contains("error")) {
+                std::cerr << "Error from socket API for Id " << id << ": " << arguments["error"].get<string>() << std::endl;
+            } else {
+                status = arguments["status"].get<string>();
+            }
+        } catch (json::exception &e) {
+            std::cerr << "Invalid JSON message: " << msgAttr << e.what() << std::endl;
+            return;
+        }
+
+        if (id > 0) {
+            int res{HydJobState::Failed}; // Default set to fail
+            if (status == "OK") {
+                res = HydJobState::Success; // good!
+            } else {
+                cout << "ERROR from socket API for Id" << id << endl;
             }
 
-            if (id > 0) {
-                int res{-1}; // Default set to fail
-                if (status == "OK") {
-                    res = 0; // good!
-                } else {
-                    cout << "ERROR from socket API for Id" << id << endl;
-                }
-
-                const HydJob hj{.state = res};
-                bool ok = _sharedMap.set(id, hj);
-                if (!ok) {
-                    // the id could not be set. That means, the job was not inserted.
-                    cout << "Job not found:" << id << endl;
-                } else {
-                    cout << "Setting Job ID " << id << " to result " << res << endl;
-                }
+            const HydJob hj{.state = res};
+            bool ok = _sharedMap.set(id, hj);
+            if (!ok) {
+                // the id could not be set. That means, the job was not inserted.
+                cout << "Job not found:" << id << endl;
+            } else {
+                cout << "Setting Job ID " << id << " to result " << res << endl;
             }
-        } else if (msgType == "VERSION") {
-            vector<string> attribs = StrTools::split(msgAttr, ':');
-            if (attribs.size() == 3) {
-                cout << "Got PID of the Desktop Client: " << attribs.at(2) << endl;
-                _sharedMap.setDesktopClientPid(std::stol(attribs.at(2)));
-            }
+        }
+    } else if (msgType == "VERSION") {
+        vector<string> attribs = StrTools::split(msgAttr, ':');
+        if (attribs.size() == 3) {
+            cout << "Got PID of the Desktop Client: " << attribs.at(2) << endl;
+            _sharedMap.setDesktopClientPid(std::stol(attribs.at(2)));
         }
     }
 }
@@ -317,10 +359,10 @@ void SocketThread::ExitThread()
 //----------------------------------------------------------------------------
 // PostMsg
 //----------------------------------------------------------------------------
-void SocketThread::PostMsg(std::shared_ptr<MsgData> data)
+bool SocketThread::PostMsg(std::shared_ptr<MsgData> data)
 {
     if (m_exit.load())
-        return;
+        return false;
     assert(m_thread);
 
     // Create a new ThreadMsg
@@ -330,6 +372,7 @@ void SocketThread::PostMsg(std::shared_ptr<MsgData> data)
     std::unique_lock<std::mutex> lk(m_mutex);
     m_queue.push(threadMsg);
     m_cv.notify_one();
+    return true;
 }
 
 //----------------------------------------------------------------------------
@@ -390,11 +433,12 @@ void SocketThread::Process()
 
             if (!socketSendMsg(msgData)) {
                 cout << "Failed to send msg " << msgData->id << ": " << msgData->msg.c_str() << endl;
-            } else {
+                // The job was registered by the caller before it posted the
+                // message, so a failure to send has to be published as such.
+                // Otherwise the caller waits out its full timeout for a
+                // request that never left the machine.
                 if (msgData->id > 0) {
-                    const HydJob hj{.state = 1};
-                    _sharedMap.insert(msgData->id, hj);
-                    cout << "Storing sent message ID" << msgData->id << endl;
+                    _sharedMap.set(msgData->id, HydJob{.state = HydJobState::Failed});
                 }
             }
             break;
@@ -402,11 +446,7 @@ void SocketThread::Process()
 
         case MSG_TIMER: {
             // cout << "Timer expired on " << THREAD_NAME << endl;
-            const std::string msg = readSocket();
-            if (!msg.empty()) {
-                cout << "Message received: " << msg << endl;
-                handleReceivedMsg(msg);
-            }
+            processSocketInput();
             break;
         }
 

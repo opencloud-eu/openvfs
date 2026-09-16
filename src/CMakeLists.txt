@@ -1,4 +1,5 @@
 include(CMakePackageConfigHelpers)
+include(ECMMarkAsTest)
 include(ECMMarkNonGuiExecutable)
 include(ECMSetupVersion)
 

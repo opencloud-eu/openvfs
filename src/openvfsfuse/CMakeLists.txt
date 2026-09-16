@@ -12,5 +12,9 @@ target_link_libraries(openvfsfuse PRIVATE openvfs nlohmann_json::nlohmann_json F
 # disable darwin extensions for now
 target_compile_definitions(openvfsfuse PRIVATE FUSE_DARWIN_ENABLE_EXTENSIONS=0)
 
+if (BUILD_TESTING)
+    add_subdirectory(autotests)
+endif()
+
 install(FILES config.json DESTINATION ${KDE_INSTALL_CONFDIR}/openvfs)
 install(TARGETS openvfsfuse EXPORT OpenVFSConfig ${KDE_INSTALL_TARGETS_DEFAULT_ARGS} )
