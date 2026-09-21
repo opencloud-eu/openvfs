@@ -218,7 +218,7 @@ static void *openVFSfuse_init(struct fuse_conn_info *, fuse_config *cfg)
     // libfuse assign its own inode numbers
     cfg->use_ino = 1;
 
-    return NULL;
+    return nullptr;
 }
 
 
@@ -277,7 +277,7 @@ static int openVFSfuse_readdir(const char *orig_path, void *buf, fuse_fill_dir_t
     const auto path = getInternalPath(orig_path);
 
     dp = opendir(path.c_str());
-    if (dp == NULL) {
+    if (dp == nullptr) {
         res = -errno;
         openvfsfuse_log(path, "readdir", -1, "");
 
@@ -285,7 +285,7 @@ static int openVFSfuse_readdir(const char *orig_path, void *buf, fuse_fill_dir_t
     }
 
     struct stat st = {};
-    while ((de = readdir(dp)) != NULL) {
+    while ((de = readdir(dp)) != nullptr) {
         st.st_ino = de->d_ino;
         st.st_mode = de->d_type << 12;
         if (filler(buf, de->d_name, &st, 0, static_cast<fuse_fill_dir_flags>(0))) {
@@ -447,17 +447,17 @@ static int openVFSfuse_chmod(const char *orig_path, mode_t mode, fuse_file_info 
 static char *getusername(uid_t uid)
 {
     struct passwd *p = getpwuid(uid);
-    if (p != NULL)
+    if (p != nullptr)
         return p->pw_name;
-    return NULL;
+    return nullptr;
 }
 
 static char *getgroupname(gid_t gid)
 {
     struct group *g = getgrgid(gid);
-    if (g != NULL)
+    if (g != nullptr)
         return g->gr_name;
-    return NULL;
+    return nullptr;
 }
 
 static int openVFSfuse_chown(const char *orig_path, uid_t uid, gid_t gid, fuse_file_info *)
@@ -469,7 +469,7 @@ static int openVFSfuse_chown(const char *orig_path, uid_t uid, gid_t gid, fuse_f
     char *username = getusername(uid);
     char *groupname = getgroupname(gid);
 
-    if (username != NULL && groupname != NULL)
+    if (username != nullptr && groupname != nullptr)
         openvfsfuse_log(path, "chown", res, "chown to %d:%d %s:%s", uid, gid, username, groupname);
     else
         openvfsfuse_log(path, "chown", res, "chown to %d:%d", uid, gid);
