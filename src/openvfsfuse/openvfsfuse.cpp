@@ -210,9 +210,13 @@ void openvfsfuse_log(const std::string &path, const char *action, int returncode
     free(buf);
 }
 
-static void *openVFSfuse_init(struct fuse_conn_info *, fuse_config *)
+static void *openVFSfuse_init(struct fuse_conn_info *, fuse_config *cfg)
 {
     openvfsfuse_log("/path", "_init", 1, "**** INIT called");
+
+    // honor st_ino/d_ino from getattr() and readdir() instead of letting
+    // libfuse assign its own inode numbers
+    cfg->use_ino = 1;
 
     return NULL;
 }
@@ -222,7 +226,8 @@ static int openVFSfuse_getattr(const char *orig_path, struct stat *stbuf, fuse_f
 {
     const auto path = getInternalPath(orig_path);
     const auto res = lstat(path.c_str(), stbuf);
-    openvfsfuse_log(path, "getattr", res, "");
+    openvfsfuse_log(path, "getattr", res, "getattr inode: %ld", stbuf->st_ino);
+
     if (res == -1) {
         return -errno;
     }
@@ -279,8 +284,8 @@ static int openVFSfuse_readdir(const char *orig_path, void *buf, fuse_fill_dir_t
         return res;
     }
 
+    struct stat st = {};
     while ((de = readdir(dp)) != NULL) {
-        struct stat st = {};
         st.st_ino = de->d_ino;
         st.st_mode = de->d_type << 12;
         if (filler(buf, de->d_name, &st, 0, static_cast<fuse_fill_dir_flags>(0))) {
