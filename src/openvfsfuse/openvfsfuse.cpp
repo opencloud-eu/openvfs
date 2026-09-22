@@ -214,8 +214,7 @@ static void *openVFSfuse_init(struct fuse_conn_info *, fuse_config *cfg)
 {
     openvfsfuse_log("/path", "_init", 1, "**** INIT called");
 
-    // honor st_ino/d_ino from getattr() and readdir() instead of letting
-    // libfuse assign its own inode numbers
+    // use the system inodes instead of the libfuse generated
     cfg->use_ino = 1;
 
     return nullptr;
