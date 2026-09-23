@@ -72,7 +72,8 @@ public:
 
     /// Add a message to the thread queue
     /// @param[in] data - thread specific message information
-    void PostMsg(std::shared_ptr<MsgData> msg);
+    /// @return False if the thread is shutting down and the message was dropped.
+    bool PostMsg(std::shared_ptr<MsgData> msg);
 
     /// Get size of thread message queue.
     size_t GetQueueSize();
@@ -89,7 +90,10 @@ private:
     int initSocket(const std::string& socketPath);
 
     bool socketSendMsg(std::shared_ptr<MsgData>);
-    std::string readSocket();
+
+    /// Drain everything readable from the socket into _rxBuffer and dispatch
+    /// every complete (newline terminated) message it contains.
+    void processSocketInput();
     void handleReceivedMsg(const std::string &msg);
 
     /// Entry point for the worker thread
@@ -113,6 +117,10 @@ private:
     std::future<void> m_threadStartFuture;
 
     std::atomic<int> _socket;
+
+    /// Receive buffer holding the bytes read from the socket that do not form
+    /// a complete message yet. Only touched by the worker thread.
+    std::string _rxBuffer;
 
     SharedMap &_sharedMap;
 };

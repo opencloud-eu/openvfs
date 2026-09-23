@@ -34,5 +34,6 @@
             "clamscan",
             "freshclam"
         ]
-    }
+    },
+    "hydrationTimeoutSeconds": 300
 }
