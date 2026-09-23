@@ -5,6 +5,19 @@
 namespace StrTools {
 // Custom implementation of string split, which is not available in std::
 // remove it it once is added
+std::string join(const std::vector<std::string> v, char joiner)
+{
+    std::string s;
+    for (std::vector<std::string>::const_iterator ii = v.begin(); ii != v.end(); ++ii) {
+        s += (*ii);
+        if (ii + 1 != v.end()) {
+            s += joiner;
+        }
+    }
+
+    return s;
+}
+
 std::vector<std::string> split(const std::string &str, char delimiter)
 {
     std::vector<std::string> tokens;
