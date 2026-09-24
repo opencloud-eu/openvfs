@@ -9,8 +9,7 @@ namespace StrTools {
 
 std::string join(const std::vector<std::string> v, char joiner)
 {
-    const std::string str{std::from_range, v | std::views::join_with(joiner)};
-    return str;
+    return std::string{std::from_range, v | std::views::join_with(joiner)};
 }
 
 // Custom implementation of string split, which is not available in std::
