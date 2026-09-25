@@ -29,7 +29,6 @@
 #include <grp.h>
 #include <iostream>
 #include <pwd.h>
-#include <sstream>
 #include <stdarg.h>
 #include <stdio.h>
 #include <unistd.h>
@@ -216,6 +215,9 @@ static void *openVFSfuse_init(struct fuse_conn_info *, fuse_config *cfg)
 
     // use the system inodes instead of the libfuse generated
     cfg->use_ino = 1;
+    cfg->attr_timeout = 0;
+    cfg->entry_timeout = 0;
+    cfg->negative_timeout = 0;
 
     return nullptr;
 }

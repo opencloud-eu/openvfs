@@ -2,7 +2,16 @@
 // SPDX-FileCopyrightText: 2026 Klaas Freitag <k.freitag@opencloud.eu>
 #include "strtools.h"
 
+#include <ranges>
+#include <string>
+
 namespace StrTools {
+
+std::string join(const std::vector<std::string> v, char joiner)
+{
+    return v | std::views::join_with(joiner) | std::ranges::to<std::string>();
+}
+
 // Custom implementation of string split, which is not available in std::
 // remove it it once is added
 std::vector<std::string> split(const std::string &str, char delimiter)

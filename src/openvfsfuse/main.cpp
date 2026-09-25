@@ -14,34 +14,16 @@
 
 #include <nlohmann/json.hpp>
 
+#include "strtools.h"
 
 using json = nlohmann::json;
 
 namespace {
 constexpr int MaxFuseArgs = 32;
 
-
-// We need the "nonempty" option to mount the directory in recent FUSE's
-// because it's non empty and contains the files that will be logged.
-//
-// We need "use_ino" so the files will use their original inode numbers,
-// instead of all getting 0xFFFFFFFF . For example, this is required for
-// logging the ~/.kde/share/config directory, in which hard links for lock
-// files are verified by their inode equivalency.
-//
-// We need "atomic_o_trunc" option. if not, then FUSE will call truncate()
-// function before calling open(). if the option was set, the O_TRUNC flag
-// is passed to open() function. Without this flag, this will cause opening
-// files in gvfs to fail.
-// https://gitlab.gnome.org/GNOME/gvfs/-/blob/master/client/gvfsfusedaemon.c#L1045
-
-
-namespace {
-    const std::string FuseStandardArgsStr = "attr_timeout=0,entry_timeout=0,negative_timeout=0,auto_unmount";
-    const std::string ConfigIgnoreAppsStr = "ignoreApps";
-    const std::string ConfigByNameStr = "byName";
-    const std::string ConfigEndsWith = "endsWith";
-}
+const std::string ConfigIgnoreAppsStr = "ignoreApps";
+const std::string ConfigByNameStr = "byName";
+const std::string ConfigEndsWith = "endsWith";
 
 void usage(char *name)
 {
@@ -59,7 +41,10 @@ std::optional<openVFSfuse_Args> processArgs(int argc, char *argv[])
 
     int res;
 
-    bool got_p = false;
+    // preset passed standard options which can not be set in fuse_config in
+    // the init function called openVFSfuse_init()
+    // auto_umount: Unmount the fuse layer automatically if the app crashes.
+    std::vector<std::string> opts{"auto_umount"};
 
     while ((res = getopt(argc, argv, "hpfdi:o:s:")) != -1) {
         switch (res) {
@@ -73,9 +58,10 @@ std::optional<openVFSfuse_Args> processArgs(int argc, char *argv[])
             std::cout << "openVFSfuse not running as a daemon" << std::endl;
             break;
         case 'p':
-            out.fuseArgv.emplace_back("-o");
-            out.fuseArgv.emplace_back("allow_other,default_permissions," + FuseStandardArgsStr);
-            got_p = true;
+            // make the mount public
+            opts.push_back("allow_other");
+            opts.push_back("default_permission");
+
             std::cout << "openVFSfuse running as a public filesystem" << std::endl;
             break;
         case 'd':
@@ -104,9 +90,9 @@ std::optional<openVFSfuse_Args> processArgs(int argc, char *argv[])
         }
     }
 
-    if (!got_p) {
+    if (opts.size() > 0) {
         out.fuseArgv.emplace_back("-o");
-        out.fuseArgv.emplace_back(FuseStandardArgsStr.c_str());
+        out.fuseArgv.emplace_back(StrTools::join(opts, ',').c_str());
     }
 
     if (optind + 1 <= argc) {
