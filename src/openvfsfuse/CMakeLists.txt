@@ -14,3 +14,7 @@ target_compile_definitions(openvfsfuse PRIVATE FUSE_DARWIN_ENABLE_EXTENSIONS=0)
 
 install(FILES config.json DESTINATION ${KDE_INSTALL_CONFDIR}/openvfs)
 install(TARGETS openvfsfuse EXPORT OpenVFSConfig ${KDE_INSTALL_TARGETS_DEFAULT_ARGS} )
+
+if(BUILD_TESTING)
+    add_subdirectory(tests)
+endif()
