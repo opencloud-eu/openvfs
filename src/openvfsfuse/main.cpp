@@ -44,7 +44,7 @@ std::optional<openVFSfuse_Args> processArgs(int argc, char *argv[])
     // preset passed standard options which can not be set in fuse_config in
     // the init function called openVFSfuse_init()
     // auto_umount: Unmount the fuse layer automatically if the app crashes.
-    std::vector<std::string> opts{"auto_umount"};
+    std::vector<std::string> opts{"auto_unmount"};
 
     while ((res = getopt(argc, argv, "hpfdi:o:s:")) != -1) {
         switch (res) {
