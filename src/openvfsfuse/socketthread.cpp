@@ -177,7 +177,7 @@ void SocketThread::processSocketInput()
     while (true) {
         const ssize_t n = read(_socket, buf, sizeof(buf));
         if (n > 0) {
-            _rxBuffer.append(buf, static_cast<size_t>(n));
+            _rxBuffer.append(buf, n);
             continue;
         }
         if (n == 0) {
@@ -205,6 +205,7 @@ void SocketThread::processSocketInput()
 #endif
             // there is a serious error coming from read
             perror("read");
+            _rxBuffer.clear();
             return;
         }
         // end the loop if we get here
