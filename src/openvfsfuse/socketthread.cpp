@@ -181,54 +181,54 @@ void SocketThread::processSocketInput()
     // read may return a fragment of a message, several messages at once, or
     // both. Accumulate into _rxBuffer and only dispatch complete lines.
     char buf[SingleReadBufferSize];
-    while (true) {
-        const ssize_t n = read(_socket, buf, sizeof(buf));
+
+    bool contRead{true};
+    ssize_t n;
+    while (contRead) {
+        n = read(_socket, buf, sizeof(buf));
+
         if (n > 0) {
+            // all good, we read something and continue to do so
             _rxBuffer.append(buf, n);
-            continue;
-        }
-        if (n == 0) {
-            // Peer closed the connection. Whatever is left in the buffer can
-            // never be completed, so drop it rather than misparsing it later.
-            if (!_rxBuffer.empty()) {
-                std::cerr << "Socket closed with " << _rxBuffer.size() << " bytes of incomplete message, discarding" << std::endl;
-                _rxBuffer.clear();
-            }
-            return;
-        }
+        } else if (n == 0) {
+            // Peer closed the connection. Whatever is left in the buffer will
+            // be interpreted - and remaining incompleted reads will be erased.
+            std::cerr << "Socket closed by peer" << std::endl;
+            contRead = false;
+        } else if (n < 0) {
+            // error condition
+            if (errno == EINTR) {
+                // EINTR is just a interruption, continue reading
+            } else {
+                // stop reading in all other error conditions
+                contRead = false;
 
-        // n is -1 -> error condition, check the errno
-        if (errno == EINTR) {
-            // ignored, we try to get more...
-            continue;
-        }
-        // EAGAIN on the non-blocking socket simply means there is nothing more
-        // to read right now. EWOULDBLOCK is an alias for it on Linux and macOS,
-        // but is checked separately for portability to platforms where it isn't.
-#if EAGAIN == EWOULDBLOCK
-        if (errno != EAGAIN) {
-#else
-        if (errno != EAGAIN && errno != EWOULDBLOCK) {
+                // ...and if it is serious, log it
+                if (errno != EAGAIN
+#if EAGAIN != EWOULDBLOCK
+                    && errno != EWOULDBLOCK
 #endif
-            // there is a serious error coming from read
-            perror("read");
-            _rxBuffer.clear();
-            return;
+                ) {
+                    // a serious errno was set
+                    perror("socket read");
+                }
+            }
         }
-        // end the loop if we get here
-        break;
     }
 
-    size_t pos;
-    while ((pos = _rxBuffer.find('\n')) != std::string::npos) {
-        handleReceivedMsg(_rxBuffer.substr(0, pos));
-        _rxBuffer.erase(0, pos + 1);
+    // handle the contents of _rxBuffer here
+    size_t newpos, pos{0};
+    while ((newpos = _rxBuffer.find('\n', pos)) != std::string::npos) {
+        handleReceivedMsg(_rxBuffer.substr(pos, newpos - pos));
+        pos = newpos + 1;
     }
+    _rxBuffer.erase(0, pos); // clear everything that was processed
 
     // A peer that never sends a newline must not be able to grow our buffer
     // without bound.
-    if (_rxBuffer.size() > MaxRxBufferSize) {
-        std::cerr << "Discarding " << _rxBuffer.size() << " bytes of unterminated message from the socket API" << std::endl;
+    // Also, if n == 0 because that are useless fragments after connection closed
+    if (n == 0 || _rxBuffer.size() > MaxRxBufferSize) {
+        std::cerr << "Discarding " << _rxBuffer.size() << " bytes from the socket API" << std::endl;
         _rxBuffer.clear();
     }
 }

@@ -51,6 +51,11 @@ std::string makeSocketPath()
 int listenOn(const std::string &path)
 {
     const int fd = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (fd < 0) {
+        std::cerr << "Failed to create socket " << path << ": " << std::strerror(errno) << std::endl;
+        std::exit(2);
+    }
+
     sockaddr_un addr{};
     addr.sun_family = AF_UNIX;
     std::strncpy(addr.sun_path, path.c_str(), sizeof(addr.sun_path) - 1);
@@ -130,6 +135,23 @@ int main()
     post(104);
     writeAll(client, hydrateResult(104, "\"status\":\"OK\""));
     check(jobs.waitForJob(104, 10s) == HydJobResult::Succeeded, "the stream stays in sync");
+
+    // An unterminated fragment that exceeds the receive buffer cap (exercises
+    // looping over several SingleReadBufferSize-sized reads within a single
+    // processSocketInput() call, i.e. the "n > 0, keep reading" branch of the
+    // loop) must be discarded instead of growing _rxBuffer without bound, and
+    // the stream must still be usable for the next message afterwards.
+    writeAll(client, std::string(150 * 1024, 'X')); // no trailing '\n', so never dispatched
+    std::this_thread::sleep_for(750ms);
+    post(150);
+    writeAll(client, hydrateResult(150, "\"status\":\"OK\""));
+    check(jobs.waitForJob(150, 10s) == HydJobResult::Succeeded, "an oversized unterminated fragment is discarded and the stream recovers");
+
+    // An empty line (two consecutive newlines) must be handled by the
+    // buffer-splitting loop without desynchronising the stream.
+    post(151);
+    writeAll(client, "\n" + hydrateResult(151, "\"status\":\"OK\""));
+    check(jobs.waitForJob(151, 10s) == HydJobResult::Succeeded, "an empty line ahead of a message does not desync the stream");
 
     // A silent client must time out, bounded by wall-clock time.
     post(105);
