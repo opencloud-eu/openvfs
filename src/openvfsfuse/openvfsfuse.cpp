@@ -184,9 +184,7 @@ std::string getcallername(fuse_context *context)
 static SharedMap _jobs;
 static SocketThread _socketThread("SocketThread", _jobs);
 
-// FUSE dispatches requests from several threads, so the transfer id handed to
-// the client must be incremented atomically -- two opens racing for the same id
-// would share a single job entry.
+// FUSE dispatches requests from several threads, so the transfer id needs to be atomic
 static std::atomic<int> _transfer_id{12};
 
 
@@ -562,66 +560,61 @@ static int openVFSfuse_open(const char *orig_path, struct fuse_file_info *fi)
     if (callerBelongsToProcess(fuse_get_context()->pid, _jobs.desktopClientPid())) {
         openvfsfuse_log(path, "open", res, "Desktop client tries to access, bypassing!");
     } else {
-        if (const auto attribs = OpenVFS::PlaceHolderAttributes::fromAttributes(path)) {
-            if (attribs->state == OpenVFS::Constants::States::DeHydrated) {
-                // the file is virtual. It will be hydrated if the calling instance
-                // is not on the ignore list
+        const auto attribs = OpenVFS::PlaceHolderAttributes::fromAttributes(path);
+        if (attribs && attribs->state == OpenVFS::Constants::States::DeHydrated) {
+            // the file is virtual. It will be hydrated if the calling instance
+            // is not on the ignore list
 
-                // ignore list of apps that must not cause a hydration
-                if (VFSFuseContext::instance().blockedToOpen(opener)) {
-                    openvfsfuse_log(path, "open", 0, "blocked hydration for not permitted app %s", opener.c_str());
-                    return -EPERM;
-                }
-
-                // Create message to send to worker thread 1
-                std::shared_ptr<MsgData> msgData(new MsgData());
-                msgData->msg = "V2/HYDRATE_FILE";
-                msgData->file = VFSFuseContext::instance().getExternalPath(attribs->absolutePath);
-                msgData->fileId = attribs->fileId;
-                msgData->requester = getcallername(fuse_get_context());
-                msgData->id = ++_transfer_id; // attention: _transfer_id is global and can change!
-
-                openvfsfuse_log(path, "open", 0, "Requesting hydration %s: %d", path.c_str(), msgData->id);
-
-                // Register the job *before* handing the request over. PostMsg() only
-                // queues, so the socket thread may well have sent the request and
-                // received the answer before this thread runs again. A waiter must
-                // never be able to observe the absence of a job it just posted.
-                _jobs.insert(msgData->id, HydJob{.state = HydJobState::Running});
-
-                // push hydration request to the thread that handles the communication to the client
-                if (!_socketThread.PostMsg(msgData)) {
-                    _jobs.remove(msgData->id);
-                    openvfsfuse_log(path, "open", 0, "Could not queue hydration request %d, shutting down", msgData->id);
-                    return -EIO;
-                }
-
-                // The socketThread now talks to the client, which downloads the file
-                // for us. Block here until the client answers or the timeout expires.
-                const auto result = _jobs.waitForJob(msgData->id, VFSFuseContext::instance().hydrationTimeout());
-
-                // remove the job regardless of the result
-                _jobs.remove(msgData->id);
-
-                switch (result) {
-                case HydJobResult::Succeeded:
-                    openvfsfuse_log(path, "open", 0, "Sucessfully finished job %d", msgData->id);
-                    break;
-                case HydJobResult::Failed:
-                    openvfsfuse_log(path, "open", 0, "Failed job %d", msgData->id);
-                    return -EIO;
-                case HydJobResult::TimedOut:
-                    openvfsfuse_log(path, "open", 0, "TIMEOUT - no answer from client for job %d", msgData->id);
-                    return -ETIMEDOUT;
-                case HydJobResult::Lost:
-                    openvfsfuse_log(path, "open", 0, "Job queue does not have job %d", msgData->id);
-                    return -EIO;
-                }
-
-                openvfsfuse_log(path, "open", 0, "-- open finished");
+            // ignore list of apps that must not cause a hydration
+            if (VFSFuseContext::instance().blockedToOpen(opener)) {
+                openvfsfuse_log(path, "open", 0, "blocked hydration for not permitted app %s", opener.c_str());
+                return -EPERM;
             }
-        } else {
-            openvfsfuse_log(path, "open", 0, "Not a placeholder file");
+
+            // Create message to send to worker thread 1
+            std::shared_ptr<MsgData> msgData(new MsgData());
+            msgData->msg = "V2/HYDRATE_FILE";
+            msgData->file = VFSFuseContext::instance().getExternalPath(attribs->absolutePath);
+            msgData->fileId = attribs->fileId;
+            msgData->requester = getcallername(fuse_get_context());
+            msgData->id = ++_transfer_id; // attention: _transfer_id is global and can change!
+
+            openvfsfuse_log(path, "open", 0, "Requesting hydration %s: %d", path.c_str(), msgData->id);
+
+            // Register the job *before* handing the request over. PostMsg() only
+            // queues, so the socket thread may well have sent the request and
+            // received the answer before this thread runs again. A waiter must
+            // never be able to observe the absence of a job it just posted.
+            _jobs.insert(msgData->id, HydJob{.state = HydJobState::Running});
+
+            // push hydration request to the thread that handles the communication to the client
+            if (!_socketThread.PostMsg(msgData)) {
+                _jobs.remove(msgData->id);
+                openvfsfuse_log(path, "open", 0, "Could not queue hydration request %d, shutting down", msgData->id);
+                return -EIO;
+            }
+
+            // The socketThread now talks to the client, which downloads the file
+            // for us. Block here until the client answers or the timeout expires.
+            const auto result = _jobs.waitForJob(msgData->id, VFSFuseContext::instance().hydrationTimeout());
+
+            // remove the job regardless of the result
+            _jobs.remove(msgData->id);
+
+            switch (result) {
+            case HydJobResult::Succeeded:
+                openvfsfuse_log(path, "open", 0, "Sucessfully finished job %d", msgData->id);
+                break;
+            case HydJobResult::Failed:
+                openvfsfuse_log(path, "open", 0, "Failed job %d", msgData->id);
+                return -EIO;
+            case HydJobResult::TimedOut:
+                openvfsfuse_log(path, "open", 0, "TIMEOUT - no answer from client for job %d", msgData->id);
+                return -ETIMEDOUT;
+            case HydJobResult::Lost:
+                openvfsfuse_log(path, "open", 0, "Job queue does not have job %d", msgData->id);
+                return -EIO;
+            }
         }
     }
     // File is not dehydrated and it is just going to be opened

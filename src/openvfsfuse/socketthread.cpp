@@ -141,7 +141,7 @@ bool SocketThread::socketSendMsg(std::shared_ptr<MsgData> msgData)
     std::string msg{msgData->msg};
 
     // prepare the OpenCloud message to be sent over the wire
-    if (msg.empty()) {
+    if (msg.empty() || _socket == -1) {
         return false;
     }
 
