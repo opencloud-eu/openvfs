@@ -170,7 +170,7 @@ bool SocketThread::socketSendMsg(std::shared_ptr<MsgData> msgData)
 
 void SocketThread::processSocketInput()
 {
-    assert(_socket > 0);
+    assert(_socket >= 0);
 
     // The socket is a SOCK_STREAM and carries no message boundaries: a single
     // read may return a fragment of a message, several messages at once, or
@@ -198,6 +198,8 @@ void SocketThread::processSocketInput()
                 // stop reading in all other error conditions
                 contRead = false;
 
+                // EAGAIN means that no data is available at the moment, which is
+                // not an issue for non blocking sockets. All other errnos are.
                 if (errno != EAGAIN
 #if EAGAIN != EWOULDBLOCK
                     && errno != EWOULDBLOCK
