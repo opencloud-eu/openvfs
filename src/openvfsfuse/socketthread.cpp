@@ -290,20 +290,20 @@ void SocketThread::handleReceivedMsg(const std::string &msg)
         }
 
         if (id > 0) {
-            int res{HydJobState::Failed}; // Default set to fail
+            auto res{HydJobState::Failed}; // Default set to fail
             if (status == "OK") {
                 res = HydJobState::Success; // good!
             } else {
                 cout << "ERROR from socket API for Id" << id << endl;
             }
 
-            const HydJob hj{.state = res};
+            const HydJob hj{._state = res};
             bool ok = _sharedMap.set(id, hj);
             if (!ok) {
                 // the id could not be set. That means, the job was not inserted.
                 cout << "Job not found:" << id << endl;
             } else {
-                cout << "Setting Job ID " << id << " to result " << res << endl;
+                cout << "Setting Job ID " << id << " to result " << hj.stateStr() << endl;
             }
         }
     } else if (msgType == "VERSION") {
@@ -474,7 +474,7 @@ void SocketThread::Process()
                 // Otherwise the caller waits out its full timeout for a
                 // request that never left the machine.
                 if (msgData->id > 0) {
-                    _sharedMap.set(msgData->id, HydJob{.state = HydJobState::Failed});
+                    _sharedMap.set(msgData->id, HydJob{._state = HydJobState::Failed});
                 }
             }
             break;

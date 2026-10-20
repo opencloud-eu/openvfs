@@ -24,30 +24,42 @@
 
 #include <chrono>
 #include <condition_variable>
-#include <iostream>
 #include <map>
 #include <mutex>
 #include <string>
-#include <thread>
 
 /**
- * The values a hydration job can take. A job starts out Running and is moved to
+ * The states a hydration job can be in. A job starts out Running and is moved to
  * one of the other states by the socket thread.
  */
-namespace HydJobState {
-constexpr int Success = 0;
-constexpr int Running = 1;
-constexpr int Failed = -1;
-}
+enum class HydJobState { Success = 0, Running = 1, Failed = -1 };
 
-struct HydJob
+/**
+ * The HydJob class represents a hydration job that is stored in the job queue
+ * and passes data between fuse- and worker thread
+ */
+class HydJob
 {
 public:
-    int state;
+    HydJobState _state;
+
+    std::string stateStr() const
+    {
+        switch (_state) {
+        case HydJobState::Success:
+            return "success";
+        case HydJobState::Failed:
+            return "failed";
+        case HydJobState::Running:
+            return "running";
+        default:
+            return "undef";
+        }
+    }
 };
 
 /**
- * Outcome of waiting for a hydration job to leave the Running state.
+ * Outcome of a hydration job after it left the Running state.
  */
 enum class HydJobResult {
     Succeeded, ///< the client reported the file as hydrated
@@ -55,6 +67,7 @@ enum class HydJobResult {
     TimedOut, ///< the client did not answer within the timeout
     Lost, ///< the job vanished from the map, which should not happen
 };
+
 
 class SharedMap
 {

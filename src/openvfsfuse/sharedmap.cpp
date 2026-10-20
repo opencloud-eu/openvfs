@@ -18,6 +18,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
+#include <iostream>
 
 #include "sharedmap.h"
 
@@ -70,7 +71,7 @@ HydJobResult SharedMap::waitForJob(int key, std::chrono::milliseconds timeout)
 
     const bool settled = _cv.wait_for(lock, timeout, [this, key] {
         const auto it = _data.find(key);
-        return it == _data.end() || it->second.state != HydJobState::Running;
+        return it == _data.end() || it->second._state != HydJobState::Running;
     });
 
     if (!settled) {
@@ -81,7 +82,7 @@ HydJobResult SharedMap::waitForJob(int key, std::chrono::milliseconds timeout)
     if (it == _data.end()) {
         return HydJobResult::Lost;
     }
-    return it->second.state == HydJobState::Success ? HydJobResult::Succeeded : HydJobResult::Failed;
+    return it->second._state == HydJobState::Success ? HydJobResult::Succeeded : HydJobResult::Failed;
 }
 
 bool SharedMap::remove(int id)
@@ -117,6 +118,6 @@ void SharedMap::printAll()
 {
     std::lock_guard<std::mutex> lock(_mutex);
     for (auto &[k, v] : _data) {
-        std::cout << k << ": " << v.state << "\n";
+        std::cout << k << ": " << v.stateStr() << "\n";
     }
 }

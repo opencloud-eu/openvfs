@@ -101,7 +101,7 @@ int main()
         data->msg = "V2/HYDRATE_FILE";
         data->file = "/tmp/some/file";
         data->id = id;
-        jobs.insert(id, HydJob{.state = HydJobState::Running});
+        jobs.insert(id, HydJob{._state = HydJobState::Running});
         socketThread.PostMsg(data);
     };
 

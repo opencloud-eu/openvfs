@@ -585,7 +585,7 @@ static int openVFSfuse_open(const char *orig_path, struct fuse_file_info *fi)
             // queues, so the socket thread may well have sent the request and
             // received the answer before this thread runs again. A waiter must
             // never be able to observe the absence of a job it just posted.
-            _jobs.insert(msgData->id, HydJob{.state = HydJobState::Running});
+            _jobs.insert(msgData->id, HydJob{._state = HydJobState::Running});
 
             // push hydration request to the thread that handles the communication to the client
             if (!_socketThread.PostMsg(msgData)) {
