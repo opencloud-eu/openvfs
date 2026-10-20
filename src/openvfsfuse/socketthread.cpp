@@ -369,10 +369,11 @@ void SocketThread::ExitThread()
     // Create a new ThreadMsg
     std::shared_ptr<ThreadMsg> threadMsg(new ThreadMsg(MSG_EXIT_THREAD, nullptr));
 
-    m_exit.store(true);
     // Put exit thread message into the queue
     {
+        // Set under the queue mutex so PostMsg() can't enqueue behind the exit message
         lock_guard<mutex> lock(m_mutex);
+        m_exit.store(true);
         m_queue.push(threadMsg);
         m_cv.notify_one();
     }
@@ -393,6 +394,7 @@ void SocketThread::ExitThread()
 //----------------------------------------------------------------------------
 bool SocketThread::PostMsg(std::shared_ptr<MsgData> data)
 {
+    lock_guard<mutex> lock(m_mutex);
     if (m_exit.load()) {
         return false;
     }
@@ -403,7 +405,6 @@ bool SocketThread::PostMsg(std::shared_ptr<MsgData> data)
 
     // Add user data msg to queue and notify worker thread
 
-    lock_guard<mutex> lock(m_mutex);
     m_queue.push(threadMsg);
     m_cv.notify_one();
 
