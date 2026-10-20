@@ -87,7 +87,7 @@ private:
     SocketThread &operator=(const SocketThread &) = delete;
 
     /// Initialise the socket to communicate with the client
-    int initSocket(const std::string& socketPath);
+    bool initSocket();
 
     bool socketSendMsg(std::shared_ptr<MsgData>);
 
@@ -111,6 +111,7 @@ private:
     std::atomic<bool> m_exit;
     std::atomic<bool> m_timerExit;
     const std::string THREAD_NAME;
+    std::string _socketPath;
 
     // Promise and future to synchronize thread start
     std::promise<void> m_threadStartPromise;

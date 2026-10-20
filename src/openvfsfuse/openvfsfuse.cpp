@@ -603,7 +603,7 @@ static int openVFSfuse_open(const char *orig_path, struct fuse_file_info *fi)
 
             switch (result) {
             case HydJobResult::Succeeded:
-                openvfsfuse_log(path, "open", 0, "Sucessfully finished job %d", msgData->id);
+                openvfsfuse_log(path, "open", 0, "Successfully finished job %d", msgData->id);
                 break;
             case HydJobResult::Failed:
                 openvfsfuse_log(path, "open", 0, "Failed job %d", msgData->id);
@@ -802,8 +802,10 @@ int initializeOpenVFSFuse(openVFSfuse_Args &openVFSArgs)
     openVFSfuse_oper.removexattr = openVFSfuse_removexattr;
 
     assert(!openVFSArgs.socketPath.empty());
-    _socketThread.CreateThread(openVFSArgs.socketPath);
-
+    if (!_socketThread.CreateThread(openVFSArgs.socketPath)) {
+        std::cerr << "Unable to create the socket thread" << std::endl;
+        return -1;
+    }
 
     std::cout << "openVFSfuse starting: PID:" << getpid();
     std::cout << ", Socket:" << openVFSArgs.socketPath << std::endl;

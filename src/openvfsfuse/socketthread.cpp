@@ -72,6 +72,7 @@ SocketThread::SocketThread(const std::string &threadName, SharedMap &map)
     , m_exit(false)
     , m_timerExit(false)
     , THREAD_NAME(threadName)
+    , _socket(-1)
     , _sharedMap(map)
 {
 }
@@ -89,6 +90,8 @@ SocketThread::~SocketThread()
 //----------------------------------------------------------------------------
 bool SocketThread::CreateThread(const std::string& socketPath)
 {
+    bool re{true};
+
     if (!m_thread) {
         m_threadStartFuture = m_threadStartPromise.get_future();
 
@@ -99,33 +102,41 @@ bool SocketThread::CreateThread(const std::string& socketPath)
 
         // Wait for the thread to enter the Process method
         m_threadStartFuture.get();
+        _socketPath = socketPath;
 
-        initSocket(socketPath);
+        re = initSocket();
     }
 
-    return true;
+    return re;
 }
 
-int SocketThread::initSocket(const std::string& socketPath)
+bool SocketThread::initSocket()
 {
-    assert(!socketPath.empty());
+    assert(!_socketPath.empty());
 
     _socket = socket(AF_UNIX, SOCK_STREAM, 0);
     if (_socket < 0) {
-        return -1;
+        return false;
     }
     // Put the socket in non-blocking mode:
     if (fcntl(_socket, F_SETFL, fcntl(_socket, F_GETFL) | O_NONBLOCK) < 0) {
         // handle error
+        perror("fcntl");
+        close(_socket);
+        _socket = -1;
+        return false;
     }
 
     struct sockaddr_un addr{};
     addr.sun_family = AF_UNIX;
 
-    std::strncpy(addr.sun_path, socketPath.c_str(), sizeof(addr.sun_path) - 1);
+    std::strncpy(addr.sun_path, _socketPath.c_str(), sizeof(addr.sun_path) - 1);
 
     if (connect(_socket, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
-        return -1;
+        perror("connect");
+        close(_socket);
+        _socket = -1;
+        return false;
     }
 
     /* send  a welcome message to the SocketAPI */
@@ -133,7 +144,7 @@ int SocketThread::initSocket(const std::string& socketPath)
     msgData->msg = "VERSION";
     PostMsg(msgData);
 
-    return 1;
+    return true;
 }
 
 bool SocketThread::socketSendMsg(std::shared_ptr<MsgData> msgData)
@@ -156,9 +167,12 @@ bool SocketThread::socketSendMsg(std::shared_ptr<MsgData> msgData)
     // send message
     ssize_t value;
 
-    value = write(_socket, msg.c_str(), msg.size());
+    // the msg buffer is sent to the socket, and SIGPIPE is ignored. If SIGPIPE is not ignored,
+    // it could bring down the entire fuse layer in case the peer closes the socket, which would
+    // generate the signal
+    value = send(_socket, msg.c_str(), msg.size(), MSG_NOSIGNAL);
     if (value < 0) {
-        perror("write");
+        perror("send");
         close(_socket);
         // Mark the descriptor as gone so we do not keep reading from and
         // writing to a closed fd on every subsequent tick.
@@ -173,7 +187,14 @@ bool SocketThread::socketSendMsg(std::shared_ptr<MsgData> msgData)
 
 void SocketThread::processSocketInput()
 {
-    assert(_socket >= 0);
+    if (_socket < 0) {
+        // the socket can only be -1 if the connection was closed by the peer.
+        // But this fuse layer is completely controlled by the client, which is
+        // the peer, so every reconnect attempt will fail.
+        // Also, if the client goes down and closes the socket, this fuse is also
+        // closed down.
+        return;
+    }
 
     // The socket is a SOCK_STREAM and carries no message boundaries: a single
     // read may return a fragment of a message, several messages at once, or
@@ -341,12 +362,14 @@ void SocketThread::SetThreadName([[maybe_unused]] std::thread::native_handle_typ
 //----------------------------------------------------------------------------
 void SocketThread::ExitThread()
 {
-    if (!m_thread)
+    if (!m_thread) {
         return;
+    }
 
     // Create a new ThreadMsg
     std::shared_ptr<ThreadMsg> threadMsg(new ThreadMsg(MSG_EXIT_THREAD, nullptr));
 
+    m_exit.store(true);
     // Put exit thread message into the queue
     {
         lock_guard<mutex> lock(m_mutex);
@@ -354,7 +377,6 @@ void SocketThread::ExitThread()
         m_cv.notify_one();
     }
 
-    m_exit.store(true);
     m_thread->join();
 
     // Clear the queue if anything added while waiting for join
@@ -371,17 +393,20 @@ void SocketThread::ExitThread()
 //----------------------------------------------------------------------------
 bool SocketThread::PostMsg(std::shared_ptr<MsgData> data)
 {
-    if (m_exit.load())
+    if (m_exit.load()) {
         return false;
+    }
     assert(m_thread);
 
     // Create a new ThreadMsg
     std::shared_ptr<ThreadMsg> threadMsg(new ThreadMsg(MSG_POST_USER_DATA, data));
 
     // Add user data msg to queue and notify worker thread
-    std::unique_lock<std::mutex> lk(m_mutex);
+
+    lock_guard<mutex> lock(m_mutex);
     m_queue.push(threadMsg);
     m_cv.notify_one();
+
     return true;
 }
 
@@ -397,7 +422,7 @@ void SocketThread::TimerThread()
         std::shared_ptr<ThreadMsg> threadMsg(new ThreadMsg(MSG_TIMER, nullptr));
 
         // Add timer msg to queue and notify worker thread
-        std::unique_lock<std::mutex> lk(m_mutex);
+        lock_guard<mutex> lock(m_mutex);
         m_queue.push(threadMsg);
         m_cv.notify_one();
     }
