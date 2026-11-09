@@ -703,6 +703,19 @@ static int openVFSfuse_fsync(const char *orig_path, int isdatasync, struct fuse_
 static int openVFSfuse_setxattr(const char *orig_path, const char *name, const char *value, size_t size, int flags)
 {
     const auto path = getInternalPath(orig_path);
+
+    // File managers copy all user.* xattrs on copy and paste. A copied
+    // user.openvfs.data would carry the fileid and state of the original, so
+    // only the desktop client may write it. Other writers drop the entry, the
+    // client sets it again for files inside the sync root.
+    const auto desktopClientPid = _jobs.desktopClientPid();
+    if (std::string_view(name) == OpenVFS::Constants::XAttributeNames::Data && desktopClientPid > 0
+        && !callerBelongsToProcess(fuse_get_context()->pid, desktopClientPid)) {
+        openvfsfuse_log(path, "setxattr", 0, "dropped %s written by pid %d", name, fuse_get_context()->pid);
+        Xattr::removexattr(path, name);
+        return 0;
+    }
+
     return Xattr::setxattr(path, name, value, size, flags);
 }
 
