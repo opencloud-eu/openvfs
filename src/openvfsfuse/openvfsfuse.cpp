@@ -238,10 +238,13 @@ static int openVFSfuse_getattr(const char *orig_path, struct stat *stbuf, fuse_f
     if (res == -1) {
         return -errno;
     }
-    // check virtual size if size is 0 and path is not a dir
-    if (!S_ISDIR(stbuf->st_mode) && stbuf->st_size == 0) {
+
+    // read the virtual size if it is not a dir and has a dehydrated attribute
+    if (!S_ISDIR(stbuf->st_mode)) {
         if (const auto attr = OpenVFS::PlaceHolderAttributes::fromAttributes(path)) {
-            stbuf->st_size = static_cast<decltype(stbuf->st_size)>(attr->size);
+            if (attr->state == OpenVFS::Constants::States::DeHydrated) {
+                stbuf->st_size = static_cast<decltype(stbuf->st_size)>(attr->size);
+            }
         }
     }
     return 0;
@@ -525,20 +528,18 @@ static int openVFSfuse_create(const char *orig_path, mode_t mode, struct fuse_fi
 
     const int res = open(path.c_str(), fi->flags, mode);
     if (res == -1) {
-        const auto error = errno;
         openvfsfuse_log(path, "create", -1, "create %o", static_cast<unsigned int>(mode));
-        return -error;
+        return -errno;
     }
 
     if (fchown(res, fuse_get_context()->uid, fuse_get_context()->gid) == -1) {
-        const auto error = errno;
         const auto cleanupError = unlink(path.c_str()) == -1 ? errno : 0;
         close(res);
         openvfsfuse_log(path, "create", -1, "set ownership after create %o", static_cast<unsigned int>(mode));
         if (cleanupError != 0) {
             openvfsfuse_log(path, "create", -1, "failed to remove incomplete file: errno %d", cleanupError);
         }
-        return -error;
+        return -errno;
     }
     openvfsfuse_log(path, "create", 0, "create %o", static_cast<unsigned int>(mode));
     fi->fh = res;
