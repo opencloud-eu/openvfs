@@ -238,10 +238,13 @@ static int openVFSfuse_getattr(const char *orig_path, struct stat *stbuf, fuse_f
     if (res == -1) {
         return -errno;
     }
-    // check virtual size if size is 0 and path is not a dir
-    if (!S_ISDIR(stbuf->st_mode) && stbuf->st_size == 0) {
+
+    // read the virtual size if it is not a dir and has a dehydrated attribute
+    if (!S_ISDIR(stbuf->st_mode)) {
         if (const auto attr = OpenVFS::PlaceHolderAttributes::fromAttributes(path)) {
-            stbuf->st_size = static_cast<decltype(stbuf->st_size)>(attr->size);
+            if (attr->state == OpenVFS::Constants::States::DeHydrated) {
+                stbuf->st_size = static_cast<decltype(stbuf->st_size)>(attr->size);
+            }
         }
     }
     return 0;
